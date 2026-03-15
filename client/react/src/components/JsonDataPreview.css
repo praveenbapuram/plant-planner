@@ -1,0 +1,77 @@
+.json-preview {
+  position: absolute;
+  bottom: var(--space-lg);
+  right: var(--space-lg);
+  width: 380px;
+  max-height: 340px;
+  z-index: 1000;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: slideInUp var(--transition-slow) forwards;
+}
+
+.json-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.json-preview-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.json-preview-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.json-preview-body {
+  max-height: 250px;
+  overflow-y: auto;
+  padding: var(--space-md);
+  background: var(--bg-primary);
+}
+
+.json-preview-body pre {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Syntax highlighting */
+.json-key {
+  color: var(--accent-primary);
+}
+
+.json-string {
+  color: #fbbf24;
+}
+
+.json-number {
+  color: #60a5fa;
+}
+
+.json-boolean {
+  color: #c084fc;
+}
+
+.json-null {
+  color: var(--text-muted);
+}
+
+.json-preview-empty {
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
