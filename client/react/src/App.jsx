@@ -16,6 +16,14 @@ export default function App() {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  
+  // Mobile Detection
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   const canvasRef = useRef(null);
 
@@ -76,47 +84,48 @@ export default function App() {
     <div className="app-container">
       {/* HEADER SECTION */}
       <header className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '32px', height: '32px', background: 'var(--accent-primary)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'black', fontWeight: 800 }}>P</div>
-          <h1 style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>PlantPlanner <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '5px' }}>v2.0</span></h1>
-        </div>
+            <div style={{ width: '32px', height: '32px', background: 'var(--accent-primary)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'black', fontWeight: 800 }}>P</div>
+            {!isMobile && <h1 style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'var(--font-heading)', letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>PlantPlanner <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '5px' }}>v2.0</span></h1>}
+          </div>
           <button className="btn btn-secondary" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-            {isSidebarOpen ? '⇠ Close Library' : '⇢ Open Library'}
+            {isMobile ? '📚' : (isSidebarOpen ? '⇠ Close Library' : '⇢ Open Library')}
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
-          <button className="btn btn-secondary" onClick={handleNewPlot}>New Blank</button>
-          <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={() => setIsSaveDialogOpen(true)}>
-            {activePlot ? '💾 Save Changes' : '💾 Save New Project'}
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          {isMobile ? (
+            <button className="btn btn-primary" onClick={() => setIsSaveDialogOpen(true)}>💾 Save</button>
+          ) : (
+            <>
+              <button className="btn btn-secondary" onClick={handleNewPlot}>New Blank</button>
+              <button className="btn btn-primary" onClick={() => setIsSaveDialogOpen(true)}>
+                {activePlot ? '💾 Save Changes' : '💾 Save New Project'}
+              </button>
+            </>
+          )}
         </div>
       </header>
 
       {/* LEFT SIDEBAR: Project Library */}
-      <aside className={`sidebar-left ${isSidebarOpen ? '' : 'collapsed'}`}>
-        <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <aside className={`sidebar-left ${isSidebarOpen ? 'open' : 'collapsed'}`}>
+        <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '1px' }}>Project Library</h3>
+          {isMobile && <button className="btn btn-ghost" onClick={() => setIsSidebarOpen(false)}>✕</button>}
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
-          {isLoading ? (
-            <div style={{ padding: '20px', textAlign: 'center', opacity: 0.5 }}>Syncing layouts...</div>
-          ) : plots.map(p => (
+          {plots.map(p => (
             <div 
               key={p.id} 
               className={`card ${activePlot?.id === p.id ? 'active' : ''}`}
               style={{ marginBottom: '8px', cursor: 'pointer', borderColor: activePlot?.id === p.id ? 'var(--accent-primary)' : '' }}
-              onClick={() => handleSelectPlot(p.id)}
+              onClick={() => { handleSelectPlot(p.id); if(isMobile) setIsSidebarOpen(false); }}
             >
               <div style={{ fontWeight: 600, fontSize: '14px' }}>{p.name}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{p.geojson?.length || 0} objects • CAD Blueprint</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{p.geojson?.length || 0} objects</div>
             </div>
           ))}
-          {plots.length === 0 && !isLoading && <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>No saved layouts.</div>}
-        </div>
-        <div style={{ padding: '20px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)' }}>
-           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Total Layouts: {plots.length}</div>
         </div>
       </aside>
 
@@ -136,12 +145,12 @@ export default function App() {
         </div>
       </main>
 
-      {/* RIGHT SIDEBAR: Live JSON Preview & Details */}
-      {isRightSidebarOpen && (
-        <aside className="sidebar-right animate-slide-right">
-          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)' }}>
-            <h3 style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '1px' }}>Blueprint Data</h3>
-          </div>
+      {/* RIGHT SIDEBAR (Bottom Sheet on Mobile) */}
+      <aside className={`sidebar-right ${isRightSidebarOpen ? 'open' : ''}`}>
+        <div style={{ padding: '15px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '1px' }}>Blueprint Data</h3>
+          {isMobile && <button className="btn btn-ghost" onClick={() => setIsRightSidebarOpen(false)}>✕ Close</button>}
+        </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             <JsonDataPreview data={currentShapes} isVisible={true} inline={true} />
           </div>
@@ -150,7 +159,16 @@ export default function App() {
                 This JSON payload can be sent to AI models or other CAD engines for further processing.
              </p>
           </div>
-        </aside>
+      </aside>
+
+      {/* MOBILE TOOLS BAR */}
+      {isMobile && (
+        <div className="mobile-tools-bar">
+          <button className="btn btn-secondary" onClick={() => setIsRightSidebarOpen(true)}>📊 Data</button>
+          <div style={{ width: '2px', height: '30px', background: 'var(--border-subtle)' }} />
+          <button className="btn btn-secondary" onClick={handleNewPlot}>✨ New</button>
+          <button className="btn btn-primary" onClick={() => setIsSaveDialogOpen(true)}>💾 Save</button>
+        </div>
       )}
 
       {/* DIALOGS */}
