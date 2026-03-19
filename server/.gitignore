@@ -13,6 +13,9 @@ env/
 *.sqlite3
 *.db
 
+# Local JSON storage
+data/
+
 # IDEs
 .vscode/
 .idea/
