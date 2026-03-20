@@ -37,6 +37,7 @@ def create_plot(plot: PlotCreate):
         "id": str(uuid.uuid4()),
         "name": plot.name,
         "geojson": plot.geojson,
+        "shapeCount": len(plot.geojson) if isinstance(plot.geojson, list) else 0,
         "createdAt": now,
         "updatedAt": now,
     }
@@ -54,6 +55,7 @@ def update_plot(plot_id: str, plot: PlotUpdate):
         updates["name"] = plot.name
     if plot.geojson is not None:
         updates["geojson"] = plot.geojson
+        updates["shapeCount"] = len(plot.geojson) if isinstance(plot.geojson, list) else 0
 
     result = storage.update_plot(plot_id, updates)
     if result is None:

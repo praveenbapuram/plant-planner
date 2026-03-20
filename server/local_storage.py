@@ -48,9 +48,16 @@ class LocalStorage(StorageBackend):
             path = os.path.join(LOCAL_STORAGE_DIR, fname)
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            geojson = data.get("geojson", [])
+            if isinstance(geojson, str):
+                try:
+                    geojson = json.loads(geojson)
+                except (json.JSONDecodeError, TypeError):
+                    geojson = []
             items.append({
                 "id": data["id"],
                 "name": data["name"],
+                "shapeCount": len(geojson) if isinstance(geojson, list) else 0,
                 "createdAt": data["createdAt"],
                 "updatedAt": data["updatedAt"],
             })

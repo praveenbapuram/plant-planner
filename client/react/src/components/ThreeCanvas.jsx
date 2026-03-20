@@ -56,8 +56,8 @@ function rgbaToHex(rgba) {
   return `#${[r, g, b].map(c => parseInt(c).toString(16).padStart(2, '0')).join('')}`;
 }
 
-function to3D(x, y, height = 0) {
-  return [x * SCALE, height, -y * SCALE];
+function to3D(x, y, height = 0, elevation = 0) {
+  return [x * SCALE, height + elevation * SCALE, -y * SCALE];
 }
 
 function computeBounds(shapes) {
@@ -80,12 +80,24 @@ function computeBounds(shapes) {
   };
 }
 
-// Common props for interactive meshes
-function useMeshInteraction(shapeId, onSelect, isDraggable, onDrag) {
+// Common props for interactive meshes.
+// Drag is handled entirely by DomDragSystem at the DOM level.
+// This hook only handles selection (onClick) and hover styling.
+function useMeshInteraction(shapeId, onSelect, isDraggable) {
   const [hovered, setHovered] = useState(false);
+  // Ref callback to mark mesh in userData (for DomDragSystem raycasting)
+  const meshRef = useCallback((node) => {
+    if (node) {
+      node.userData.draggable = !!isDraggable;
+      node.userData.shapeId = shapeId;
+    }
+  }, [isDraggable, shapeId]);
   const handlers = useMemo(() => ({
-    onClick: (e) => { e.stopPropagation(); onSelect(shapeId); },
-    onPointerOver: (e) => {
+    onClick: (e) => {
+      e.stopPropagation();
+      onSelect(shapeId);
+    },
+    onPointerOver: () => {
       setHovered(true);
       if (isDraggable) document.body.style.cursor = 'grab';
     },
@@ -93,14 +105,8 @@ function useMeshInteraction(shapeId, onSelect, isDraggable, onDrag) {
       setHovered(false);
       document.body.style.cursor = '';
     },
-    onPointerDown: (e) => {
-      if (isDraggable) {
-        document.body.style.cursor = 'grabbing';
-        onDrag?.(e, shapeId);
-      }
-    },
-  }), [shapeId, onSelect, isDraggable, onDrag]);
-  return { hovered, handlers };
+  }), [shapeId, onSelect, isDraggable]);
+  return { hovered, handlers, meshRef };
 }
 
 function ShapeLabel({ name, position }) {
@@ -132,23 +138,24 @@ function mat(fill, opacity, isSelected, hovered, opts = {}) {
 // ═════════════════════════════════════════════════════════════════
 
 // ─── Rectangle / Box ──────────────────────────────────────────────
-function Rectangle3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Rectangle3D({ shape, isSelected, onSelect, isDraggable }) {
   const w = (shape.width || 50) * SCALE;
   const d = (shape.height || 50) * SCALE;
   const h = shape.extrudeHeight || EXTRUDE_HEIGHT;
+  const elev = (shape.z || 0) * SCALE;
   const fill = rgbaToHex(shape.fill) || shape.stroke || '#34d399';
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
 
   const pos = useMemo(() => {
     const cx = (shape.x + (shape.width || 50) / 2) * SCALE;
     const cz = -(shape.y + (shape.height || 50) / 2) * SCALE;
-    return [cx, h / 2, cz];
-  }, [shape.x, shape.y, shape.width, shape.height, h]);
+    return [cx, h / 2 + elev, cz];
+  }, [shape.x, shape.y, shape.width, shape.height, h, elev]);
 
   return (
     <group>
       <mesh position={pos} rotation={[0, -(shape.rotation || 0) * Math.PI / 180, 0]}
-        {...handlers} castShadow receiveShadow>
+        ref={meshRef} {...handlers} castShadow receiveShadow>
         <boxGeometry args={[w, h, d]} />
         {mat(fill, shape.opacity ?? 0.7, isSelected, hovered)}
       </mesh>
@@ -156,22 +163,22 @@ function Rectangle3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
         <edgesGeometry args={[new THREE.BoxGeometry(w, h, d)]} />
         <lineBasicMaterial color={isSelected ? '#ffffff' : (shape.stroke || '#34d399')} linewidth={2} />
       </lineSegments>
-      <ShapeLabel name={shape.name} position={[pos[0], h + 0.15, pos[2]]} />
+      <ShapeLabel name={shape.name} position={[pos[0], pos[1] + h / 2 + 0.15, pos[2]]} />
     </group>
   );
 }
 
 // ─── Circle / Cylinder ────────────────────────────────────────────
-function Circle3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Circle3D({ shape, isSelected, onSelect, isDraggable }) {
   const r = (shape.radius || 30) * SCALE;
   const h = shape.extrudeHeight || EXTRUDE_HEIGHT;
   const fill = rgbaToHex(shape.fill) || shape.stroke || '#34d399';
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
-  const pos = useMemo(() => to3D(shape.x, shape.y, h / 2), [shape.x, shape.y, h]);
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, h / 2, shape.z || 0), [shape.x, shape.y, h, shape.z]);
 
   return (
     <group>
-      <mesh position={pos} {...handlers} castShadow receiveShadow>
+      <mesh position={pos} ref={meshRef} {...handlers} castShadow receiveShadow>
         <cylinderGeometry args={[r, r, h, 32]} />
         {mat(fill, shape.opacity ?? 0.7, isSelected, hovered)}
       </mesh>
@@ -179,23 +186,23 @@ function Circle3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
         <edgesGeometry args={[new THREE.CylinderGeometry(r, r, h, 32)]} />
         <lineBasicMaterial color={isSelected ? '#ffffff' : (shape.stroke || '#34d399')} />
       </lineSegments>
-      <ShapeLabel name={shape.name} position={[pos[0], h + 0.15, pos[2]]} />
+      <ShapeLabel name={shape.name} position={[pos[0], pos[1] + h / 2 + 0.15, pos[2]]} />
     </group>
   );
 }
 
 // ─── Ellipse ──────────────────────────────────────────────────────
-function Ellipse3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Ellipse3D({ shape, isSelected, onSelect, isDraggable }) {
   const rx = (shape.radiusX || 40) * SCALE;
   const ry = (shape.radiusY || 25) * SCALE;
   const h = shape.extrudeHeight || EXTRUDE_HEIGHT;
   const fill = rgbaToHex(shape.fill) || shape.stroke || '#34d399';
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
-  const pos = useMemo(() => to3D(shape.x, shape.y, h / 2), [shape.x, shape.y, h]);
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, h / 2, shape.z || 0), [shape.x, shape.y, h, shape.z]);
 
   return (
     <group>
-      <mesh position={pos} scale={[rx, 1, ry]} {...handlers} castShadow receiveShadow>
+      <mesh position={pos} scale={[rx, 1, ry]} ref={meshRef} {...handlers} castShadow receiveShadow>
         <cylinderGeometry args={[1, 1, h, 32]} />
         {mat(fill, shape.opacity ?? 0.7, isSelected, hovered)}
       </mesh>
@@ -205,12 +212,13 @@ function Ellipse3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 }
 
 // ─── Triangle ─────────────────────────────────────────────────────
-function Triangle3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Triangle3D({ shape, isSelected, onSelect, isDraggable }) {
   const r = (shape.radius || 30) * SCALE;
   const h = shape.extrudeHeight || EXTRUDE_HEIGHT;
   const fill = rgbaToHex(shape.fill) || shape.stroke || '#34d399';
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
-  const pos = useMemo(() => to3D(shape.x, shape.y, 0), [shape.x, shape.y]);
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const elev = (shape.z || 0) * SCALE;
+  const pos = useMemo(() => to3D(shape.x, shape.y, 0, shape.z || 0), [shape.x, shape.y, shape.z]);
 
   const geometry = useMemo(() => {
     const triShape = new THREE.Shape();
@@ -229,21 +237,22 @@ function Triangle3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 
   return (
     <group>
-      <mesh geometry={geometry} position={[pos[0], 0, pos[2]]}
+      <mesh geometry={geometry} position={[pos[0], elev, pos[2]]}
         rotation={[0, -(shape.rotation || 0) * Math.PI / 180, 0]}
-        {...handlers} castShadow receiveShadow>
+        ref={meshRef} {...handlers} castShadow receiveShadow>
         {mat(fill, shape.opacity ?? 0.7, isSelected, hovered, { doubleSide: true })}
       </mesh>
-      <ShapeLabel name={shape.name} position={[pos[0], h + 0.15, pos[2]]} />
+      <ShapeLabel name={shape.name} position={[pos[0], h + elev + 0.15, pos[2]]} />
     </group>
   );
 }
 
 // ─── Polygon / Boundary ──────────────────────────────────────────
-function Polygon3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Polygon3D({ shape, isSelected, onSelect, isDraggable }) {
   const h = shape.extrudeHeight || EXTRUDE_HEIGHT;
+  const elev = (shape.z || 0) * SCALE;
   const fill = rgbaToHex(shape.fill) || shape.stroke || '#34d399';
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
 
   const geometry = useMemo(() => {
     if (!shape.points || shape.points.length < 6) return null;
@@ -268,63 +277,61 @@ function Polygon3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 
   return (
     <group>
-      <mesh geometry={geometry} {...handlers} castShadow receiveShadow>
+      <mesh geometry={geometry} position={[0, elev, 0]} ref={meshRef} {...handlers} castShadow receiveShadow>
         {mat(fill, shape.opacity ?? 0.7, isSelected, hovered, { doubleSide: true })}
       </mesh>
-      <ShapeLabel name={shape.name} position={centroid} />
+      <ShapeLabel name={shape.name} position={[centroid[0], centroid[1] + elev, centroid[2]]} />
     </group>
   );
 }
 
 // ─── Line ─────────────────────────────────────────────────────────
-function Line3D({ shape, isSelected, onSelect }) {
-  const [hovered, setHovered] = useState(false);
+function Line3D({ shape, isSelected, onSelect, isDraggable }) {
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const { center, relPoints } = usePointsWithCenter(shape.points, 0.05);
 
-  const points = useMemo(() => {
-    if (!shape.points || shape.points.length < 4) return null;
-    const pts = [];
-    for (let i = 0; i < shape.points.length; i += 2) {
-      pts.push(new THREE.Vector3(shape.points[i] * SCALE, 0.05, -shape.points[i + 1] * SCALE));
-    }
-    return pts;
-  }, [shape.points]);
-
-  if (!points) return null;
+  if (!relPoints || !center) return null;
   const lineColor = shape.stroke || LINE_TYPE_COLORS[shape.lineType] || '#ffffff';
   const lineWidth = (shape.strokeWidth || 3) * 0.8;
 
   return (
-    <group>
-      <Line points={points} color={isSelected ? '#ffffff' : lineColor}
+    <group position={[center[0], elev, center[2]]} rotation={[0, -rot, 0]}>
+      {/* Invisible hitbox mesh for drag detection */}
+      <mesh ref={meshRef} {...handlers} visible={false}>
+        <tubeGeometry args={[new THREE.CatmullRomCurve3(relPoints), 20, 0.08, 8, false]} />
+        <meshBasicMaterial />
+      </mesh>
+      <Line points={relPoints} color={isSelected ? '#ffffff' : lineColor}
         lineWidth={hovered ? lineWidth + 1 : lineWidth}
         onClick={(e) => { e.stopPropagation(); onSelect(shape.id); }}
-        onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}
         dashed={shape.dash && shape.dash.length > 0}
         dashSize={shape.dash?.[0] ? shape.dash[0] * SCALE : undefined}
         gapSize={shape.dash?.[1] ? shape.dash[1] * SCALE : undefined}
       />
       {shape.lineType === 'piping' && (
         <mesh>
-          <tubeGeometry args={[new THREE.CatmullRomCurve3(points), 20, 0.04, 8, false]} />
+          <tubeGeometry args={[new THREE.CatmullRomCurve3(relPoints), 20, 0.04, 8, false]} />
           <meshStandardMaterial color={lineColor} transparent opacity={0.6} roughness={0.3} metalness={0.5} />
         </mesh>
       )}
       <ShapeLabel name={shape.name} position={[
-        (points[0].x + points[points.length - 1].x) / 2, 0.25,
-        (points[0].z + points[points.length - 1].z) / 2
+        (relPoints[0].x + relPoints[relPoints.length - 1].x) / 2, 0.25,
+        (relPoints[0].z + relPoints[relPoints.length - 1].z) / 2
       ]} />
     </group>
   );
 }
 
 // ─── Arc ──────────────────────────────────────────────────────────
-function Arc3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Arc3D({ shape, isSelected, onSelect, isDraggable }) {
   const outerR = (shape.outerRadius || 50) * SCALE;
   const innerR = (shape.innerRadius || 30) * SCALE;
   const h = shape.extrudeHeight || EXTRUDE_HEIGHT * 0.5;
   const fill = rgbaToHex(shape.fill) || shape.stroke || '#34d399';
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
-  const pos = useMemo(() => to3D(shape.x, shape.y, h / 2), [shape.x, shape.y, h]);
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, h / 2, shape.z || 0), [shape.x, shape.y, h, shape.z]);
 
   const geometry = useMemo(() => {
     const from = (shape.angleFrom || 0) * Math.PI / 180;
@@ -340,7 +347,7 @@ function Arc3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 
   return (
     <group>
-      <mesh geometry={geometry} position={[pos[0], 0, pos[2]]} {...handlers} castShadow receiveShadow>
+      <mesh geometry={geometry} position={[pos[0], 0, pos[2]]} ref={meshRef} {...handlers} castShadow receiveShadow>
         {mat(fill, shape.opacity ?? 0.7, isSelected, hovered, { doubleSide: true })}
       </mesh>
       <ShapeLabel name={shape.name} position={[pos[0], h + 0.15, pos[2]]} />
@@ -353,16 +360,17 @@ function Arc3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 // ═════════════════════════════════════════════════════════════════
 
 // ─── Tank (cylinder body + dome top + rim) ────────────────────────
-function Tank3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Tank3D({ shape, isSelected, onSelect, isDraggable }) {
   const r = (shape.radius || 40) * SCALE;
   const h = shape.extrudeHeight || 1.0;
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
-  const pos = useMemo(() => to3D(shape.x, shape.y, 0), [shape.x, shape.y]);
+  const elev = (shape.z || 0) * SCALE;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, 0, shape.z || 0), [shape.x, shape.y, shape.z]);
 
   return (
-    <group position={[pos[0], 0, pos[2]]}>
+    <group position={[pos[0], elev, pos[2]]}>
       {/* Body */}
-      <mesh position={[0, h / 2, 0]} {...handlers} castShadow receiveShadow>
+      <mesh position={[0, h / 2, 0]} ref={meshRef} {...handlers} castShadow receiveShadow>
         <cylinderGeometry args={[r, r, h, 32]} />
         <meshStandardMaterial color="#64748b" transparent opacity={hovered ? 0.95 : 0.85}
           emissive={isSelected ? '#64748b' : '#000'} emissiveIntensity={isSelected ? 0.3 : 0}
@@ -390,18 +398,19 @@ function Tank3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 }
 
 // ─── House (box body + triangular roof) ──────────────────────────
-function House3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function House3D({ shape, isSelected, onSelect, isDraggable }) {
   // All dims in px, converted with SCALE for 3D
   const len  = (shape.houseLength || shape.width || 120) * SCALE;  // X axis
   const wid  = (shape.houseWidth  || shape.depth || 100) * SCALE;  // Z axis
   const wallH = (shape.houseHeight || 80) * SCALE;                 // Y axis (wall height)
   const roofH = (shape.roofHeight  || 40) * SCALE;                 // Y axis (roof above walls)
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
+  const elev = (shape.z || 0) * SCALE;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
   const pos = useMemo(() => {
     const cx = (shape.x + (shape.houseLength || shape.width || 120) / 2) * SCALE;
     const cz = -(shape.y + (shape.houseWidth || shape.depth || 100) / 2) * SCALE;
-    return [cx, 0, cz];
-  }, [shape.x, shape.y, shape.houseLength, shape.width, shape.houseWidth, shape.depth]);
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.houseLength, shape.width, shape.houseWidth, shape.depth, elev]);
 
   // Roof geometry — triangular prism
   const roofGeom = useMemo(() => {
@@ -422,7 +431,7 @@ function House3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
   return (
     <group position={pos}>
       {/* Walls */}
-      <mesh position={[0, wallH / 2, 0]} {...handlers} castShadow receiveShadow>
+      <mesh position={[0, wallH / 2, 0]} ref={meshRef} {...handlers} castShadow receiveShadow>
         <boxGeometry args={[len, wallH, wid]} />
         <meshStandardMaterial color="#e2e8f0" transparent opacity={hovered ? 0.95 : 0.9}
           emissive={isSelected ? '#e2e8f0' : '#000'} emissiveIntensity={isSelected ? 0.2 : 0}
@@ -455,18 +464,19 @@ function House3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 }
 
 // ─── Tree (trunk cylinder + 3 layered cones for canopy) ──────────
-function Tree3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Tree3D({ shape, isSelected, onSelect, isDraggable }) {
   const trunkR = (shape.trunkRadius || 5) * SCALE;
   const trunkH = shape.trunkHeight || 0.4;
   const canopyR = (shape.canopyRadius || 30) * SCALE;
   const canopyH = shape.extrudeHeight || 0.8;
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
-  const pos = useMemo(() => to3D(shape.x, shape.y, 0), [shape.x, shape.y]);
+  const elev = (shape.z || 0) * SCALE;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, 0, shape.z || 0), [shape.x, shape.y, shape.z]);
 
   return (
-    <group position={[pos[0], 0, pos[2]]}>
+    <group position={[pos[0], elev, pos[2]]}>
       {/* Trunk */}
-      <mesh position={[0, trunkH / 2, 0]} {...handlers} castShadow>
+      <mesh position={[0, trunkH / 2, 0]} ref={meshRef} {...handlers} castShadow>
         <cylinderGeometry args={[trunkR, trunkR * 1.3, trunkH, 8]} />
         <meshStandardMaterial color="#92400e" roughness={0.9} metalness={0.0} />
       </mesh>
@@ -494,22 +504,23 @@ function Tree3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 }
 
 // ─── Wall (long thin extruded box) ───────────────────────────────
-function Wall3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Wall3D({ shape, isSelected, onSelect, isDraggable }) {
   const w = (shape.width || 200) * SCALE;
   const t = (shape.thickness || 10) * SCALE;
   const h = shape.extrudeHeight || 1.0;
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
+  const elev = (shape.z || 0) * SCALE;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
 
   const pos = useMemo(() => {
     const cx = (shape.x + (shape.width || 200) / 2) * SCALE;
     const cz = -(shape.y + (shape.thickness || 10) / 2) * SCALE;
-    return [cx, h / 2, cz];
-  }, [shape.x, shape.y, shape.width, shape.thickness, h]);
+    return [cx, h / 2 + elev, cz];
+  }, [shape.x, shape.y, shape.width, shape.thickness, h, elev]);
 
   return (
     <group>
       <mesh position={pos} rotation={[0, -(shape.rotation || 0) * Math.PI / 180, 0]}
-        {...handlers} castShadow receiveShadow>
+        ref={meshRef} {...handlers} castShadow receiveShadow>
         <boxGeometry args={[w, h, t]} />
         <meshStandardMaterial color="#78716c" transparent opacity={hovered ? 0.95 : 0.9}
           emissive={isSelected ? '#78716c' : '#000'} emissiveIntensity={isSelected ? 0.25 : 0}
@@ -525,112 +536,124 @@ function Wall3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
   );
 }
 
-// ─── Pipe (tube along a path) ────────────────────────────────────
-function Pipe3D({ shape, isSelected, onSelect }) {
-  const [hovered, setHovered] = useState(false);
-  const pipeRadius = (shape.pipeRadius || 5) * SCALE;
-
-  const points = useMemo(() => {
-    if (!shape.points || shape.points.length < 4) return null;
-    const pts = [];
-    for (let i = 0; i < shape.points.length; i += 2) {
-      pts.push(new THREE.Vector3(shape.points[i] * SCALE, pipeRadius + 0.01, -shape.points[i + 1] * SCALE));
+// Helper: compute center & relative points for point-based shapes
+function usePointsWithCenter(shapePoints, yVal) {
+  return useMemo(() => {
+    if (!shapePoints || shapePoints.length < 4) return { center: null, relPoints: null };
+    let sumX = 0, sumY = 0, n = 0;
+    for (let i = 0; i < shapePoints.length; i += 2) {
+      sumX += shapePoints[i]; sumY += shapePoints[i + 1]; n++;
     }
-    return pts;
-  }, [shape.points, pipeRadius]);
+    const cx = sumX / n, cy = sumY / n;
+    const pts = [];
+    for (let i = 0; i < shapePoints.length; i += 2) {
+      pts.push(new THREE.Vector3(
+        (shapePoints[i] - cx) * SCALE,
+        yVal,
+        -(shapePoints[i + 1] - cy) * SCALE
+      ));
+    }
+    return { center: [cx * SCALE, 0, -cy * SCALE], relPoints: pts };
+  }, [shapePoints, yVal]);
+}
 
-  if (!points) return null;
+// ─── Pipe (tube along a path) ────────────────────────────────────
+function Pipe3D({ shape, isSelected, onSelect, isDraggable }) {
+  const pipeRadius = (shape.pipeRadius || 5) * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const { center, relPoints } = usePointsWithCenter(shape.points, pipeRadius + 0.01);
+
+  if (!relPoints) return null;
 
   return (
-    <group>
+    <group position={[center[0], elev, center[2]]} rotation={[0, -rot, 0]}>
       {/* Outer pipe */}
-      <mesh onClick={(e) => { e.stopPropagation(); onSelect(shape.id); }}
-        onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}
-        castShadow>
-        <tubeGeometry args={[new THREE.CatmullRomCurve3(points), 64, pipeRadius, 16, false]} />
+      <mesh ref={meshRef} {...handlers} castShadow>
+        <tubeGeometry args={[new THREE.CatmullRomCurve3(relPoints), 64, pipeRadius, 16, false]} />
         <meshStandardMaterial color={hovered ? '#22d3ee' : '#06b6d4'}
           transparent opacity={0.85} roughness={0.2} metalness={0.7}
           emissive={isSelected ? '#06b6d4' : '#000'} emissiveIntensity={isSelected ? 0.3 : 0} />
       </mesh>
       {/* Flanges at joints */}
-      {points.map((pt, i) => (
+      {relPoints.map((pt, i) => (
         <mesh key={i} position={pt} castShadow>
           <torusGeometry args={[pipeRadius * 1.3, pipeRadius * 0.15, 8, 16]} />
           <meshStandardMaterial color="#0891b2" roughness={0.3} metalness={0.8} />
         </mesh>
       ))}
       <ShapeLabel name={shape.name || 'Pipe'} position={[
-        (points[0].x + points[points.length - 1].x) / 2, pipeRadius * 2 + 0.2,
-        (points[0].z + points[points.length - 1].z) / 2
+        (relPoints[0].x + relPoints[relPoints.length - 1].x) / 2, pipeRadius * 2 + 0.2,
+        (relPoints[0].z + relPoints[relPoints.length - 1].z) / 2
       ]} />
     </group>
   );
 }
 
 // ─── Cable (thin dipping line with posts) ─────────────────────────
-function Cable3D({ shape, isSelected, onSelect }) {
-  const [hovered, setHovered] = useState(false);
+function Cable3D({ shape, isSelected, onSelect, isDraggable }) {
   const cableRadius = (shape.cableRadius || 2) * SCALE;
   const postHeight = shape.postHeight || 0.5;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const { center, relPoints: endPoints } = usePointsWithCenter(shape.points, postHeight);
 
+  // Add sag between 2-point cables (using relative points)
   const points = useMemo(() => {
-    if (!shape.points || shape.points.length < 4) return null;
-    const pts = [];
-    for (let i = 0; i < shape.points.length; i += 2) {
-      pts.push(new THREE.Vector3(shape.points[i] * SCALE, postHeight, -shape.points[i + 1] * SCALE));
+    if (!endPoints) return null;
+    if (endPoints.length === 2) {
+      const mid = new THREE.Vector3().lerpVectors(endPoints[0], endPoints[1], 0.5);
+      mid.y = postHeight * 0.6;
+      return [endPoints[0], mid, endPoints[1]];
     }
-    // Add sag between points
-    if (pts.length === 2) {
-      const mid = new THREE.Vector3().lerpVectors(pts[0], pts[1], 0.5);
-      mid.y = postHeight * 0.6; // sag
-      return [pts[0], mid, pts[1]];
-    }
-    return pts;
-  }, [shape.points, postHeight]);
+    return endPoints;
+  }, [endPoints, postHeight]);
 
-  if (!points) return null;
+  if (!points || !center) return null;
 
   return (
-    <group>
+    <group position={[center[0], elev, center[2]]} rotation={[0, -rot, 0]}>
       {/* Cable line */}
-      <mesh onClick={(e) => { e.stopPropagation(); onSelect(shape.id); }}
-        onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
+      <mesh ref={meshRef} {...handlers}>
         <tubeGeometry args={[new THREE.CatmullRomCurve3(points), 32, cableRadius, 8, false]} />
         <meshStandardMaterial color={hovered ? '#fbbf24' : '#f59e0b'}
           emissive={isSelected ? '#f59e0b' : '#000'} emissiveIntensity={isSelected ? 0.4 : 0}
           roughness={0.5} metalness={0.3} />
       </mesh>
-      {/* Posts at endpoints */}
-      {[points[0], points[points.length - 1]].map((pt, i) => (
+      {/* Posts at endpoints (use endPoints, not sag points) */}
+      {endPoints.map((pt, i) => (
         <mesh key={i} position={[pt.x, postHeight / 2, pt.z]} castShadow>
           <cylinderGeometry args={[0.02, 0.02, postHeight, 6]} />
           <meshStandardMaterial color="#78716c" roughness={0.8} metalness={0.2} />
         </mesh>
       ))}
       <ShapeLabel name={shape.name || 'Cable'} position={[
-        (points[0].x + points[points.length - 1].x) / 2, postHeight + 0.2,
-        (points[0].z + points[points.length - 1].z) / 2
+        (endPoints[0].x + endPoints[endPoints.length - 1].x) / 2, postHeight + 0.2,
+        (endPoints[0].z + endPoints[endPoints.length - 1].z) / 2
       ]} />
     </group>
   );
 }
 
 // ─── Path / Pathway (flat wide strip on ground) ──────────────────
-function Path3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+function Path3D({ shape, isSelected, onSelect, isDraggable }) {
   const w = (shape.pathWidth || 30) * SCALE;
   const len = (shape.width || 200) * SCALE;
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
+  const elev = (shape.z || 0) * SCALE;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
 
   const pos = useMemo(() => {
     const cx = (shape.x + (shape.width || 200) / 2) * SCALE;
     const cz = -(shape.y + (shape.pathWidth || 30) / 2) * SCALE;
-    return [cx, 0.015, cz];
-  }, [shape.x, shape.y, shape.width, shape.pathWidth]);
+    return [cx, 0.015 + elev, cz];
+  }, [shape.x, shape.y, shape.width, shape.pathWidth, elev]);
 
   return (
     <group>
       <mesh position={pos} rotation={[0, -(shape.rotation || 0) * Math.PI / 180, 0]}
-        {...handlers} receiveShadow>
+        ref={meshRef} {...handlers} receiveShadow>
         <boxGeometry args={[len, 0.03, w]} />
         <meshStandardMaterial color={hovered ? '#a3e635' : '#34d399'}
           transparent opacity={0.75}
@@ -648,44 +671,177 @@ function Path3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 }
 
 // ─── Road (wider paved surface with lane markings) ───────────────
-function Road3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
+// Road surface type definitions
+const ROAD_SURFACES = {
+  tar:      { label: 'Tar / Asphalt',  color: '#374151', hoverColor: '#4b5563', roughness: 0.92, metalness: 0.0,  markings: 'asphalt'  },
+  cement:   { label: 'Cement / Concrete', color: '#9ca3af', hoverColor: '#b0b8c4', roughness: 0.85, metalness: 0.05, markings: 'concrete' },
+  mud:      { label: 'Mud Road',        color: '#78552b', hoverColor: '#8b6934', roughness: 1.0,  metalness: 0.0,  markings: 'mud'      },
+  gravel:   { label: 'Gravel',          color: '#a8977a', hoverColor: '#bfad93', roughness: 1.0,  metalness: 0.0,  markings: 'gravel'   },
+  dirt:     { label: 'Dirt Track',      color: '#92613a', hoverColor: '#a87448', roughness: 0.98, metalness: 0.0,  markings: 'dirt'     },
+};
+
+function Road3D({ shape, isSelected, onSelect, isDraggable }) {
   const w = (shape.roadWidth || 60) * SCALE;
   const len = (shape.width || 300) * SCALE;
-  const { hovered, handlers } = useMeshInteraction(shape.id, onSelect, isDraggable, onDrag);
+  const elev = (shape.z || 0) * SCALE;
+  const surface = ROAD_SURFACES[shape.roadSurface] || ROAD_SURFACES.tar;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const rot = -(shape.rotation || 0) * Math.PI / 180;
 
   const pos = useMemo(() => {
     const cx = (shape.x + (shape.width || 300) / 2) * SCALE;
     const cz = -(shape.y + (shape.roadWidth || 60) / 2) * SCALE;
-    return [cx, 0.01, cz];
-  }, [shape.x, shape.y, shape.width, shape.roadWidth]);
+    return [cx, 0.01 + elev, cz];
+  }, [shape.x, shape.y, shape.width, shape.roadWidth, elev]);
+
+  // Generate concrete expansion joints
+  const concreteJoints = useMemo(() => {
+    if (surface.markings !== 'concrete') return null;
+    const joints = [];
+    const spacing = w * 1.2; // roughly square slabs
+    const count = Math.floor(len / spacing);
+    for (let i = 1; i < count; i++) {
+      const xOff = -len / 2 + i * spacing;
+      joints.push(xOff);
+    }
+    return joints;
+  }, [surface.markings, len, w]);
+
+  // Gravel scatter dots (decorative small meshes)
+  const gravelDots = useMemo(() => {
+    if (surface.markings !== 'gravel') return null;
+    const dots = [];
+    const seed = (shape.id || '').length;
+    for (let i = 0; i < 40; i++) {
+      const pseudoRand = ((i * 7 + seed * 13) % 97) / 97;
+      const pseudoRand2 = ((i * 11 + seed * 3) % 89) / 89;
+      dots.push({
+        x: (pseudoRand - 0.5) * len * 0.9,
+        z: (pseudoRand2 - 0.5) * w * 0.8,
+        s: 0.008 + pseudoRand * 0.012,
+      });
+    }
+    return dots;
+  }, [surface.markings, len, w, shape.id]);
 
   return (
     <group>
-      {/* Asphalt surface */}
-      <mesh position={pos} rotation={[0, -(shape.rotation || 0) * Math.PI / 180, 0]}
-        {...handlers} receiveShadow>
+      {/* Road surface */}
+      <mesh position={pos} rotation={[0, rot, 0]}
+        ref={meshRef} {...handlers} receiveShadow>
         <boxGeometry args={[len, 0.02, w]} />
-        <meshStandardMaterial color={hovered ? '#4b5563' : '#374151'}
+        <meshStandardMaterial
+          color={hovered ? surface.hoverColor : surface.color}
           transparent opacity={0.95}
-          emissive={isSelected ? '#374151' : '#000'} emissiveIntensity={isSelected ? 0.2 : 0}
-          roughness={0.95} metalness={0.0} />
+          emissive={isSelected ? surface.color : '#000'}
+          emissiveIntensity={isSelected ? 0.25 : 0}
+          roughness={surface.roughness} metalness={surface.metalness} />
       </mesh>
-      {/* Center dashed line */}
-      <Line
-        points={[[pos[0] - len / 2, 0.025, pos[2]], [pos[0] + len / 2, 0.025, pos[2]]]}
-        color="#fbbf24" lineWidth={2} dashed dashSize={0.15} gapSize={0.1}
-      />
-      {/* Edge lines */}
-      {[-1, 1].map(side => (
-        <Line key={side}
-          points={[
-            [pos[0] - len / 2, 0.025, pos[2] + side * w * 0.45],
-            [pos[0] + len / 2, 0.025, pos[2] + side * w * 0.45]
-          ]}
-          color="#e5e7eb" lineWidth={1.5}
-        />
-      ))}
-      <ShapeLabel name={shape.name || 'Road'} position={[pos[0], 0.25, pos[2]]} />
+
+      {/* ── Asphalt markings: center dashed yellow + white edge lines ── */}
+      {surface.markings === 'asphalt' && (
+        <group position={pos} rotation={[0, rot, 0]}>
+          <Line points={[[-len / 2, 0.015, 0], [len / 2, 0.015, 0]]}
+            color="#fbbf24" lineWidth={2} dashed dashSize={0.15} gapSize={0.1} />
+          {[-1, 1].map(side => (
+            <Line key={side}
+              points={[[-len / 2, 0.015, side * w * 0.45], [len / 2, 0.015, side * w * 0.45]]}
+              color="#e5e7eb" lineWidth={1.5} />
+          ))}
+        </group>
+      )}
+
+      {/* ── Concrete markings: expansion joints (perpendicular lines) + subtle edge ── */}
+      {surface.markings === 'concrete' && concreteJoints && (
+        <group position={pos} rotation={[0, rot, 0]}>
+          {concreteJoints.map((xOff, i) => (
+            <Line key={i}
+              points={[[xOff, 0.015, -w * 0.48], [xOff, 0.015, w * 0.48]]}
+              color="#6b7280" lineWidth={1} />
+          ))}
+          {/* Center joint */}
+          <Line points={[[-len / 2, 0.015, 0], [len / 2, 0.015, 0]]}
+            color="#6b7280" lineWidth={0.5} />
+          {/* Edge curbs */}
+          {[-1, 1].map(side => (
+            <mesh key={side} position={[0, 0.02, side * w * 0.49]}>
+              <boxGeometry args={[len, 0.03, w * 0.02]} />
+              <meshStandardMaterial color="#b0b8c4" roughness={0.8} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {/* ── Mud markings: wavy ruts / tire tracks ── */}
+      {surface.markings === 'mud' && (
+        <group position={pos} rotation={[0, rot, 0]}>
+          {[-0.2, 0.2].map((offset, i) => (
+            <Line key={i}
+              points={[
+                [-len / 2, 0.015, offset * w],
+                [-len / 4, 0.018, (offset + 0.03) * w],
+                [0, 0.013, (offset - 0.02) * w],
+                [len / 4, 0.017, (offset + 0.04) * w],
+                [len / 2, 0.015, offset * w],
+              ]}
+              color="#5c3d1e" lineWidth={2.5} />
+          ))}
+          {/* Puddle patches */}
+          {[-0.3, 0.15, 0.35].map((xp, i) => (
+            <mesh key={i} position={[xp * len, 0.012, ((i * 0.3 - 0.2) * w)]}
+              rotation={[-Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[w * 0.12, 12]} />
+              <meshStandardMaterial color="#5a3f20" transparent opacity={0.6} roughness={0.6} metalness={0.1} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {/* ── Gravel: scattered pebble dots ── */}
+      {surface.markings === 'gravel' && gravelDots && (
+        <group position={pos} rotation={[0, rot, 0]}>
+          {gravelDots.map((dot, i) => (
+            <mesh key={i} position={[dot.x, 0.015, dot.z]}>
+              <sphereGeometry args={[dot.s, 6, 4]} />
+              <meshStandardMaterial color={i % 3 === 0 ? '#8b7d6b' : i % 3 === 1 ? '#a09080' : '#b5a594'}
+                roughness={1} />
+            </mesh>
+          ))}
+          {/* Edge mounds */}
+          {[-1, 1].map(side => (
+            <mesh key={side} position={[0, 0.01, side * w * 0.47]}>
+              <boxGeometry args={[len, 0.015, w * 0.06]} />
+              <meshStandardMaterial color="#8b7d6b" roughness={1} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {/* ── Dirt track: twin tire ruts ── */}
+      {surface.markings === 'dirt' && (
+        <group position={pos} rotation={[0, rot, 0]}>
+          {[-0.22, 0.22].map((offset, i) => (
+            <mesh key={i} position={[0, 0.005, offset * w]}>
+              <boxGeometry args={[len * 0.95, 0.008, w * 0.12]} />
+              <meshStandardMaterial color="#6d4423" roughness={1} transparent opacity={0.7} />
+            </mesh>
+          ))}
+          {/* Center grass strip */}
+          <mesh position={[0, 0.008, 0]}>
+            <boxGeometry args={[len * 0.9, 0.005, w * 0.15]} />
+            <meshStandardMaterial color="#4a7a3d" roughness={1} transparent opacity={0.4} />
+          </mesh>
+          {/* Grass edges */}
+          {[-1, 1].map(side => (
+            <mesh key={side} position={[0, 0.005, side * w * 0.44]}>
+              <boxGeometry args={[len, 0.01, w * 0.08]} />
+              <meshStandardMaterial color="#4a7a3d" roughness={1} transparent opacity={0.35} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      <ShapeLabel name={shape.name || `${surface.label}`} position={[pos[0], 0.25 + elev, pos[2]]} />
     </group>
   );
 }
@@ -693,8 +849,8 @@ function Road3D({ shape, isSelected, onSelect, isDraggable, onDrag }) {
 // ═════════════════════════════════════════════════════════════════
 //  SHAPE DISPATCHER
 // ═════════════════════════════════════════════════════════════════
-function Shape3D({ shape, isSelected, onSelect, isDraggable, onDrag, onDragEnd }) {
-  const props = { shape, isSelected, onSelect, isDraggable, onDrag, onDragEnd };
+function Shape3D({ shape, isSelected, onSelect, isDraggable }) {
+  const props = { shape, isSelected, onSelect, isDraggable };
 
   switch (shape.type) {
     case 'rectangle':  return <Rectangle3D {...props} />;
@@ -743,20 +899,20 @@ const ELEMENT_CATALOG = [
   { type: 'pipe',      icon: '💧', label: 'Pipe',    group: 'real',  dims: { length: 200, pipeRadius: 5 } },
   { type: 'cable',     icon: '⚡', label: 'Cable',   group: 'real',  dims: { length: 200, cableRadius: 2, postHeight: 0.5 } },
   { type: 'path',      icon: '👣', label: 'Path',    group: 'real',  dims: { width: 200, pathWidth: 30 } },
-  { type: 'road',      icon: '🛣️', label: 'Road',    group: 'real',  dims: { width: 300, roadWidth: 60 } },
+  { type: 'road',      icon: '🛣️', label: 'Road',    group: 'real',  dims: { width: 300, roadWidth: 60, roadSurface: 'tar' } },
 ];
 
 // Dimension labels
 const DIM_LABELS = {
   width: 'Length (px)', height: 'Depth (px)', depth: 'Depth (px)',
   radius: 'Radius (px)', radiusX: 'Radius X (px)', radiusY: 'Radius Y (px)',
-  extrudeHeight: '3D Height', length: 'Length (px)',
+  extrudeHeight: 'Height (px)', length: 'Length (px)',
   outerRadius: 'Outer R (px)', innerRadius: 'Inner R (px)',
   angleFrom: 'Angle From', angleTo: 'Angle To', sides: 'Sides',
   thickness: 'Thickness (px)', pipeRadius: 'Pipe Radius (px)',
-  cableRadius: 'Cable Radius (px)', postHeight: 'Post Height',
-  pathWidth: 'Path Width (px)', roadWidth: 'Road Width (px)',
-  trunkRadius: 'Trunk R (px)', trunkHeight: 'Trunk Height',
+  cableRadius: 'Cable Radius (px)', postHeight: 'Post Height (px)',
+  pathWidth: 'Path Width (px)', roadWidth: 'Road Width (px)', roadSurface: 'Surface Type',
+  trunkRadius: 'Trunk R (px)', trunkHeight: 'Trunk Height (px)',
   canopyRadius: 'Canopy R (px)', roofHeight: 'Roof Height (px)',
   houseLength: 'Length (px)', houseWidth: 'Width (px)', houseHeight: 'Wall Height (px)',
 };
@@ -803,7 +959,7 @@ function PropInput({ label, value, onChange, unit = 'px', step = 5, min = 1 }) {
 }
 
 // ─── Properties Panel ─────────────────────────────────────────────
-function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape, onContinueWall, origin, unit, pxPerUnit }) {
+function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape, onContinueWall, origin, unit, pxPerUnit, onLinkStart, onUngroup, linkingFrom }) {
   if (!selectedShape) return null;
   const shape = shapes.find(s => s.id === selectedShape);
   if (!shape) return null;
@@ -816,13 +972,42 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
   const sym = UNIT_DEFS[unit]?.symbol || 'px';
   const ppu = pxPerUnit || 1;
   const uStep = unit === 'px' ? 5 : 0.5;
+  const isPointBased = shape.points && shape.points.length >= 4 &&
+    ['pipe', 'cable', 'line', 'path_line'].includes(t);
+
+  // For point-based shapes, compute center from points
+  let displayX = shape.x || 0;
+  let displayY = shape.y || 0;
+  if (isPointBased) {
+    let sumX = 0, sumY = 0, n = 0;
+    for (let i = 0; i < shape.points.length; i += 2) {
+      sumX += shape.points[i];
+      sumY += shape.points[i + 1];
+      n++;
+    }
+    displayX = sumX / n;
+    displayY = sumY / n;
+  }
+
   // Relative position from origin
-  const relX = toUnit((shape.x || 0) - ox, ppu);
-  const relY = toUnit((shape.y || 0) - oy, ppu);
+  const relX = toUnit(displayX - ox, ppu);
+  const relY = toUnit(displayY - oy, ppu);
 
   // Convert display value from px → unit, and onChange back from unit → px
   const uVal = (pxVal) => parseFloat(toUnit(pxVal, ppu).toFixed(2));
   const pxFromInput = (unitVal) => fromUnit(unitVal, ppu);
+
+  // Handler for X/Y changes on point-based shapes: move all points by delta
+  const handlePointBasedMove = (axis, newPxVal) => {
+    const oldVal = axis === 'x' ? displayX : displayY;
+    const delta = newPxVal - oldVal;
+    const newPoints = [...shape.points];
+    for (let i = 0; i < newPoints.length; i += 2) {
+      if (axis === 'x') newPoints[i] += delta;
+      else newPoints[i + 1] += delta;
+    }
+    onUpdateShape(shape.id, { points: newPoints, [axis]: newPxVal });
+  };
 
   return (
     <div className="three-height-panel glass">
@@ -832,15 +1017,28 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
       <div className="three-prop-row">
         <span className="three-prop-label">X</span>
         <input type="number" className="three-prop-edit-input three-prop-inline"
-          value={uVal(shape.x || 0)} step={uStep}
-          onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onUpdateShape(shape.id, { x: pxFromInput(v) }); }} />
+          value={uVal(displayX)} step={uStep}
+          onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) {
+            if (isPointBased) handlePointBasedMove('x', pxFromInput(v));
+            else onUpdateShape(shape.id, { x: pxFromInput(v) });
+          }}} />
         <span className="three-prop-edit-unit">{sym}</span>
       </div>
       <div className="three-prop-row">
         <span className="three-prop-label">Y</span>
         <input type="number" className="three-prop-edit-input three-prop-inline"
-          value={uVal(shape.y || 0)} step={uStep}
-          onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onUpdateShape(shape.id, { y: pxFromInput(v) }); }} />
+          value={uVal(displayY)} step={uStep}
+          onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) {
+            if (isPointBased) handlePointBasedMove('y', pxFromInput(v));
+            else onUpdateShape(shape.id, { y: pxFromInput(v) });
+          }}} />
+        <span className="three-prop-edit-unit">{sym}</span>
+      </div>
+      <div className="three-prop-row">
+        <span className="three-prop-label" style={{ color: '#60a5fa' }}>Z <small>(elev)</small></span>
+        <input type="number" className="three-prop-edit-input three-prop-inline"
+          value={uVal(shape.z || 0)} step={uStep}
+          onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onUpdateShape(shape.id, { z: pxFromInput(v) }); }} />
         <span className="three-prop-edit-unit">{sym}</span>
       </div>
       {/* ─ Relative position from origin ─ */}
@@ -931,7 +1129,8 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
       {t === 'cable' && (
         <>
           <PropInput label="Cable R" value={uVal(shape.cableRadius || 2)} unit={sym} step={uStep} onChange={(v) => onUpdateShape(shape.id, { cableRadius: pxFromInput(v) })} />
-          <PropInput label="Post Ht" value={shape.postHeight || 0.5} step={0.05} min={0.1} unit="3D" onChange={(v) => onUpdateShape(shape.id, { postHeight: v })} />
+          <PropInput label="Post Ht" value={parseFloat(toUnit((shape.postHeight || 0.5) / SCALE, ppu).toFixed(2))} step={uStep} min={0.01} unit={sym}
+            onChange={(v) => onUpdateShape(shape.id, { postHeight: fromUnit(v, ppu) * SCALE })} />
         </>
       )}
 
@@ -948,13 +1147,28 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
         <>
           <PropInput label="Length" value={uVal(shape.width || 300)} unit={sym} step={uStep} onChange={(v) => onUpdateShape(shape.id, { width: pxFromInput(v) })} />
           <PropInput label="Width" value={uVal(shape.roadWidth || 60)} unit={sym} step={uStep} onChange={(v) => onUpdateShape(shape.id, { roadWidth: pxFromInput(v) })} />
+          <div className="three-prop-section">
+            <label className="three-prop-edit-label" style={{ marginBottom: 4 }}>Surface</label>
+            <div className="three-surface-selector">
+              {Object.entries(ROAD_SURFACES).map(([key, def]) => (
+                <button key={key}
+                  className={`three-surface-btn ${(shape.roadSurface || 'tar') === key ? 'active' : ''}`}
+                  style={{ '--surface-color': def.color }}
+                  onClick={() => onUpdateShape(shape.id, { roadSurface: key })}
+                  title={def.label}>
+                  <span className="three-surface-swatch" style={{ background: def.color }} />
+                  <span className="three-surface-name">{def.label.split(/[\/\s]/)[0]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </>
       )}
 
       <div className="three-prop-divider" />
 
-      {/* ─ Rotation (all types except line-based) ─ */}
-      {!['pipe', 'cable', 'line', 'path_line'].includes(t) && (
+      {/* ─ Rotation (all types) ─ */}
+      {(
         <div className="three-prop-section">
           <div className="three-prop-edit-row">
             <label className="three-prop-edit-label">Rotation</label>
@@ -977,12 +1191,24 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
 
       <div className="three-prop-divider" />
 
-      {/* ─ 3D Height (all types with extrudeHeight) ─ */}
+      {/* ─ 3D Height (all types with extrudeHeight) — shown in selected unit ─ */}
       <div className="height-control">
         <label>Height</label>
-        <input type="range" min="0.05" max="3" step="0.05" value={h}
+        <input type="range" min="0.05" max="5" step="0.05" value={h}
           onChange={(e) => onUpdateShape(shape.id, { extrudeHeight: parseFloat(e.target.value) })} />
-        <span>{h.toFixed(2)}</span>
+        <span>{toUnit(h / SCALE, ppu).toFixed(2)} {sym}</span>
+      </div>
+      <div className="three-prop-row">
+        <span className="three-prop-label">Height</span>
+        <input type="number" className="three-prop-edit-input three-prop-inline"
+          value={parseFloat(toUnit(h / SCALE, ppu).toFixed(2))}
+          step={uStep}
+          min={0.01}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v) && v > 0) onUpdateShape(shape.id, { extrudeHeight: fromUnit(v, ppu) * SCALE });
+          }} />
+        <span className="three-prop-edit-unit">{sym}</span>
       </div>
       <div className="height-control">
         <label>Opacity</label>
@@ -1007,6 +1233,39 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
         </>
       )}
 
+      {/* ─ Group / Link ─ */}
+      <div className="three-prop-divider" />
+      {shape.groupId ? (
+        <div className="three-group-section">
+          <span className="three-group-badge">🔗 Linked group</span>
+          <span className="three-group-count">
+            ({shapes.filter(s => s.groupId === shape.groupId).length} objects)
+          </span>
+          <button className="three-group-btn three-ungroup-btn"
+            onClick={() => onUngroup && onUngroup(shape.groupId)}
+            title="Unlink all objects in this group">
+            Unlink All
+          </button>
+          <button className="three-group-btn"
+            onClick={() => onLinkStart && onLinkStart(shape.id)}
+            title="Link another object to this group">
+            + Link More
+          </button>
+        </div>
+      ) : (
+        <div className="three-group-section">
+          {linkingFrom === shape.id ? (
+            <span className="three-group-linking">Click another object to link...</span>
+          ) : (
+            <button className="three-group-btn"
+              onClick={() => onLinkStart && onLinkStart(shape.id)}
+              title="Link this object with another — they will move together">
+              🔗 Link with...
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ─ Delete Element ─ */}
       <div className="three-prop-divider" />
       <button className="three-delete-btn" onClick={() => onDeleteShape && onDeleteShape(shape.id)}
@@ -1023,12 +1282,19 @@ function DimensionModal({ elementDef, onConfirm, onCancel, unit, pxPerUnit }) {
   const ppu = pxPerUnit || 1;
   // Store dims internally in the selected unit for display, convert back to px on confirm
   const is3DKey = (k) => k === 'extrudeHeight' || k === 'trunkHeight' || k === 'postHeight';
-  const isUnitless = (k) => k.includes('angle') || k === 'sides' || k === 'lineType';
+  const isUnitless = (k) => k.includes('angle') || k === 'sides' || k === 'lineType' || k === 'roadSurface';
 
   const initDims = useMemo(() => {
     const d = {};
     Object.entries(elementDef.dims).forEach(([k, v]) => {
-      d[k] = is3DKey(k) || isUnitless(k) ? v : parseFloat(toUnit(v, ppu).toFixed(2));
+      if (isUnitless(k)) {
+        d[k] = v;
+      } else if (is3DKey(k)) {
+        // 3D height stored as world units → convert to px then to unit
+        d[k] = parseFloat(toUnit(v / SCALE, ppu).toFixed(2));
+      } else {
+        d[k] = parseFloat(toUnit(v, ppu).toFixed(2));
+      }
     });
     return d;
   }, [elementDef.dims, ppu]);
@@ -1069,27 +1335,46 @@ function DimensionModal({ elementDef, onConfirm, onCancel, unit, pxPerUnit }) {
       {editableKeys.map((key, i) => (
         <div className="three-dim-row" key={key}>
           <label>{dimLabel(key)}</label>
-          <input
-            type="number"
-            value={dims[key]}
-            step={is3DKey(key) ? 0.05 : (key === 'sides' ? 1 : (unit === 'px' ? 5 : 0.5))}
-            min={is3DKey(key) ? 0.05 : (key === 'sides' ? 3 : (unit === 'px' ? 1 : 0.01))}
-            onChange={(e) => handleChange(key, e.target.value)}
-            autoFocus={i === 0}
-          />
+          {key === 'roadSurface' ? (
+            <select value={dims[key] || 'tar'}
+              onChange={(e) => handleChange(key, e.target.value)}
+              style={{ flex: 1 }}>
+              {Object.entries(ROAD_SURFACES).map(([k, d]) => (
+                <option key={k} value={k}>{d.label}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="number"
+              value={dims[key]}
+              step={key === 'sides' ? 1 : (unit === 'px' ? 5 : 0.1)}
+              min={key === 'sides' ? 3 : (unit === 'px' ? 1 : 0.01)}
+              onChange={(e) => handleChange(key, e.target.value)}
+              autoFocus={i === 0}
+            />
+          )}
           <span className="three-dim-unit">
-            {is3DKey(key) ? '3D' : (isUnitless(key) ? '' : sym)}
+            {isUnitless(key) ? '' : sym}
           </span>
         </div>
       ))}
       <div className="three-dim-actions">
         <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
         <button className="btn btn-primary" onClick={() => {
-          // Convert unit values back to px
+          // Convert unit values back to px (or world units for 3D keys)
           const finalDims = {};
           Object.entries(dims).forEach(([k, v]) => {
+            // String-valued keys (like roadSurface) pass through as-is
+            if (k === 'roadSurface' || k === 'lineType') { finalDims[k] = v; return; }
             const numV = typeof v === 'string' ? (parseFloat(v) || elementDef.dims[k]) : v;
-            finalDims[k] = is3DKey(k) || isUnitless(k) ? numV : fromUnit(numV, ppu);
+            if (isUnitless(k)) {
+              finalDims[k] = numV;
+            } else if (is3DKey(k)) {
+              // Convert from unit → px → world units
+              finalDims[k] = fromUnit(numV, ppu) * SCALE;
+            } else {
+              finalDims[k] = fromUnit(numV, ppu);
+            }
           });
           onConfirm(finalDims, nameInput);
         }}>Place Element</button>
@@ -1146,50 +1431,183 @@ function ElevationSync({ controlsRef, onAngleChange }) {
   return null;
 }
 
-// ─── Drag Handler ─────────────────────────────────────────────────
-function DragHandler({ dragState, onMove, onEnd, viewPreset }) {
-  const { camera, raycaster, gl } = useThree();
-  // Use ground plane (Y=0) for all views — elements are placed on the ground
-  const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
-  const intersection = useMemo(() => new THREE.Vector3(), []);
-  // For front/right views, we project via a camera-facing plane through the shape's ground position
-  const shapePlane = useMemo(() => new THREE.Plane(), []);
+// ═════════════════════════════════════════════════════════════════
+// DOM-LEVEL DRAG SYSTEM
+// Completely bypasses R3F's synthetic event system and OrbitControls
+// event conflicts by using capture-phase DOM listeners + manual raycasting.
+// This is the only reliable way to make drag work alongside OrbitControls.
+// ═════════════════════════════════════════════════════════════════
+function DomDragSystem({ controlsRef, shapesRef, onDragMove, onDragEnd, onDragStart, viewPreset, moveLock }) {
+  const { gl, camera, scene } = useThree();
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const hitPoint = useRef(new THREE.Vector3());
+  // Stable axis-aligned planes — never recomputed from camera direction
+  const planes = useMemo(() => ({
+    ground: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),   // Y=0  (for top/perspective)
+    front:  new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),   // Z=0  (for front view)
+    right:  new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),   // X=0  (for right view)
+  }), []);
+  // dragRef: { shapeId, offsetX, offsetY, offsetZ, frozenX, frozenY, frozenZ }
+  // frozenX/frozenY/frozenZ: the axis value that is locked for this view
+  const dragRef = useRef(null);
 
   useEffect(() => {
-    if (!dragState) return;
     const canvas = gl.domElement;
+    const parent = canvas.parentElement;
 
-    const onPointerMove = (e) => {
+    const getMouse = (e) => {
       const rect = canvas.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
+      return new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
-      raycaster.setFromCamera(mouse, camera);
+    };
 
-      // For front/right ortho views, project onto a plane facing the camera
-      if (viewPreset === 'front' || viewPreset === 'right') {
-        const camDir = new THREE.Vector3();
-        camera.getWorldDirection(camDir);
-        shapePlane.setFromNormalAndCoplanarPoint(camDir, new THREE.Vector3(0, 0, 0));
-        if (raycaster.ray.intersectPlane(shapePlane, intersection)) {
-          onMove(dragState.shapeId, intersection.x / SCALE, -intersection.z / SCALE);
+    // Compute shape center in 2D px
+    const shapeCenter = (shape) => {
+      if (!shape) return { cx: 0, cy: 0 };
+      // Point-based shapes: compute center from points array
+      if (shape.points && shape.points.length >= 4 &&
+          ['pipe', 'cable', 'line', 'path_line'].includes(shape.type)) {
+        let sumX = 0, sumY = 0, n = 0;
+        for (let i = 0; i < shape.points.length; i += 2) {
+          sumX += shape.points[i];
+          sumY += shape.points[i + 1];
+          n++;
         }
-      } else {
-        // Top-down and perspective: project onto ground plane
-        if (raycaster.ray.intersectPlane(groundPlane, intersection)) {
-          onMove(dragState.shapeId, intersection.x / SCALE, -intersection.z / SCALE);
+        return { cx: sumX / n, cy: sumY / n };
+      }
+      if (shape.type === 'rectangle' || shape.type === 'wall' || shape.type === 'path' || shape.type === 'road') {
+        return {
+          cx: (shape.x || 0) + (shape.width || 50) / 2,
+          cy: (shape.y || 0) + (shape.height || shape.thickness || shape.pathWidth || shape.roadWidth || 50) / 2,
+        };
+      }
+      if (shape.type === 'house') {
+        return {
+          cx: (shape.x || 0) + (shape.houseLength || shape.width || 120) / 2,
+          cy: (shape.y || 0) + (shape.houseWidth || shape.depth || 100) / 2,
+        };
+      }
+      return { cx: shape.x || 0, cy: shape.y || 0 };
+    };
+
+    // Project mouse → 2D px on the appropriate stable plane.
+    // Returns { x, y, z } where null means "keep frozen value for this axis".
+    // z = elevation in px (from vertical component in front/right views)
+    const project = (e) => {
+      raycasterRef.current.setFromCamera(getMouse(e), camera);
+      const hp = hitPoint.current;
+
+      if (viewPreset === 'top' || viewPreset === 'perspective') {
+        // Ground plane (Y=0) — both axes movable, no elevation drag
+        if (raycasterRef.current.ray.intersectPlane(planes.ground, hp)) {
+          return { x: hp.x / SCALE, y: -hp.z / SCALE, z: null };
+        }
+      } else if (viewPreset === 'front') {
+        // XY plane (Z=0) — horizontal = 2D x, vertical = elevation (Y axis in 3D = z in px)
+        if (raycasterRef.current.ray.intersectPlane(planes.front, hp)) {
+          return { x: hp.x / SCALE, y: null, z: hp.y / SCALE };
+        }
+      } else if (viewPreset === 'right') {
+        // YZ plane (X=0) — horizontal = 2D y, vertical = elevation
+        if (raycasterRef.current.ray.intersectPlane(planes.right, hp)) {
+          return { x: null, y: -hp.z / SCALE, z: hp.y / SCALE };
         }
       }
+      return null;
     };
-    const onPointerUp = () => onEnd();
-    canvas.addEventListener('pointermove', onPointerMove);
-    canvas.addEventListener('pointerup', onPointerUp);
+
+    // Find which draggable shape is under the pointer
+    const findDraggableShape = (e) => {
+      raycasterRef.current.setFromCamera(getMouse(e), camera);
+      const intersects = raycasterRef.current.intersectObjects(scene.children, true);
+      for (const hit of intersects) {
+        let obj = hit.object;
+        while (obj) {
+          if (obj.userData && obj.userData.shapeId && obj.userData.draggable) {
+            return obj.userData.shapeId;
+          }
+          obj = obj.parent;
+        }
+      }
+      return null;
+    };
+
+    // ─── POINTER DOWN (capture phase — fires BEFORE OrbitControls) ───
+    const onPointerDown = (e) => {
+      if (e.button !== 0) return;
+      const shapeId = findDraggableShape(e);
+      if (!shapeId) return;
+
+      // Prevent OrbitControls from seeing this event
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (controlsRef?.current) controlsRef.current.enabled = false;
+
+      const shapes = shapesRef.current || [];
+      const shape = shapes.find(s => s.id === shapeId);
+      const { cx, cy } = shapeCenter(shape);
+      const cz = shape.z || 0; // current elevation in px
+
+      // Project cursor and compute offset
+      const cursorPos = project(e);
+      const offsetX = (cursorPos && cursorPos.x !== null) ? cx - cursorPos.x : 0;
+      const offsetY = (cursorPos && cursorPos.y !== null) ? cy - cursorPos.y : 0;
+      const offsetZ = (cursorPos && cursorPos.z !== null) ? cz - cursorPos.z : 0;
+
+      // For constrained views, freeze the non-movable axis at the current value
+      dragRef.current = {
+        shapeId,
+        offsetX,
+        offsetY,
+        offsetZ,
+        frozenX: cx,
+        frozenY: cy,
+        frozenZ: cz,
+      };
+      document.body.style.cursor = 'grabbing';
+      onDragStart(shapeId);
+    };
+
+    // ─── POINTER MOVE ───
+    const onPointerMove = (e) => {
+      if (!dragRef.current) return;
+      const pos = project(e);
+      if (!pos) return;
+
+      const d = dragRef.current;
+      // For each axis: if projection returns null, use frozen value
+      const newX = pos.x !== null ? Math.round(pos.x + d.offsetX) : d.frozenX;
+      const newY = pos.y !== null ? Math.round(pos.y + d.offsetY) : d.frozenY;
+      const newZ = pos.z !== null ? Math.round(pos.z + d.offsetZ) : d.frozenZ;
+
+      onDragMove(d.shapeId, newX, newY, newZ);
+    };
+
+    // ─── POINTER UP ───
+    const onPointerUp = () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      document.body.style.cursor = '';
+      if (controlsRef?.current && !moveLock) controlsRef.current.enabled = true;
+      onDragEnd();
+    };
+
+    // Capture phase on canvas + parent div (fires before OrbitControls bubble)
+    canvas.addEventListener('pointerdown', onPointerDown, true);
+    if (parent) parent.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
     return () => {
-      canvas.removeEventListener('pointermove', onPointerMove);
-      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointerdown', onPointerDown, true);
+      if (parent) parent.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [dragState, camera, raycaster, gl, groundPlane, shapePlane, intersection, onMove, onEnd, viewPreset]);
+  }, [gl, camera, scene, controlsRef, shapesRef, onDragMove, onDragEnd, onDragStart, viewPreset, planes, moveLock]);
+
   return null;
 }
 
@@ -1209,9 +1627,13 @@ function GridLabels3D({ unit, pxPerUnit }) {
       const unitVal = i * section;
       const txt = `${unitVal}${sym}`;
       // X-axis labels (along the red axis, Z=0)
-      arr.push({ key: `x${i}`, pos: [worldPos, 0.02, 0.15], text: txt });
-      // Z-axis labels (along the blue axis, X=0)  — 3D Z is negative of 2D Y
-      arr.push({ key: `z${i}`, pos: [0.15, 0.02, worldPos], text: txt });
+      arr.push({ key: `x${i}`, pos: [worldPos, 0.02, 0.15], text: txt, color: 'rgba(52,211,153,0.5)' });
+      // Z-axis labels (along the blue axis, X=0) — 3D Z is negative of 2D Y
+      arr.push({ key: `z${i}`, pos: [0.15, 0.02, worldPos], text: txt, color: 'rgba(52,211,153,0.5)' });
+      // Y-axis labels (vertical / elevation) — only positive
+      if (i > 0) {
+        arr.push({ key: `y${i}`, pos: [0.15, worldPos, 0.15], text: txt, color: 'rgba(96,165,250,0.6)' });
+      }
     }
     return arr;
   }, [sectionWorld, section, sym]);
@@ -1220,7 +1642,7 @@ function GridLabels3D({ unit, pxPerUnit }) {
     <group>
       {labels.map(l => (
         <Billboard key={l.key} position={l.pos}>
-          <Text fontSize={0.12} color="rgba(52,211,153,0.5)" anchorX="left" anchorY="middle">
+          <Text fontSize={0.12} color={l.color} anchorX="left" anchorY="middle">
             {l.text}
           </Text>
         </Billboard>
@@ -1229,11 +1651,81 @@ function GridLabels3D({ unit, pxPerUnit }) {
       <Billboard position={[0.1, 0.02, 0.1]}>
         <Text fontSize={0.14} color="#34d399" anchorX="left" anchorY="middle" fontWeight="bold">0</Text>
       </Billboard>
+      {/* Y-axis indicator line (vertical) */}
+      <Line
+        points={[[0, 0, 0], [0, count * sectionWorld, 0]]}
+        color="#60a5fa"
+        lineWidth={0.5}
+        transparent
+        opacity={0.3}
+      />
     </group>
   );
 }
 
 // ─── Crosshair ────────────────────────────────────────────────────
+// ─── Measurement Line (shown between two clicked points) ─────────
+function MeasureLine3D({ points, unit, pxPerUnit }) {
+  if (!points || points.length < 2) return null;
+  const p1 = points[0];
+  const p2 = points[1];
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const distPx = Math.sqrt(dx * dx + dy * dy);
+  const distUnit = toUnit(distPx, pxPerUnit || 1);
+  const sym = UNIT_DEFS[unit]?.symbol || 'px';
+
+  const a = [p1.x * SCALE, 0.1, -p1.y * SCALE];
+  const b = [p2.x * SCALE, 0.1, -p2.y * SCALE];
+  const mid = [(a[0] + b[0]) / 2, 0.35, (a[2] + b[2]) / 2];
+
+  return (
+    <group>
+      <Line points={[a, b]} color="#f59e0b" lineWidth={3} dashed dashSize={0.08} gapSize={0.04} />
+      {/* End markers */}
+      {[a, b].map((pt, i) => (
+        <mesh key={i} position={pt}>
+          <sphereGeometry args={[0.04, 8, 8]} />
+          <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.5} />
+        </mesh>
+      ))}
+      <Billboard position={mid}>
+        <Text fontSize={0.14} color="#fbbf24" anchorY="bottom" outlineWidth={0.008} outlineColor="#000">
+          {distUnit.toFixed(2)} {sym}
+        </Text>
+      </Billboard>
+    </group>
+  );
+}
+
+// ─── Measurement click handler (inside Canvas) ───────────────────
+function MeasureClickHandler({ active, onPoint }) {
+  const { camera, gl } = useThree();
+  const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  const hit = useMemo(() => new THREE.Vector3(), []);
+
+  useEffect(() => {
+    if (!active) return;
+    const canvas = gl.domElement;
+    const onClick = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      const rc = new THREE.Raycaster();
+      rc.setFromCamera(mouse, camera);
+      if (rc.ray.intersectPlane(plane, hit)) {
+        onPoint({ x: hit.x / SCALE, y: -hit.z / SCALE });
+      }
+    };
+    canvas.addEventListener('click', onClick);
+    return () => canvas.removeEventListener('click', onClick);
+  }, [active, camera, gl, plane, hit, onPoint]);
+
+  return null;
+}
+
 function CursorCrosshair({ viewPreset }) {
   const { camera, raycaster, gl } = useThree();
   const [pos, setPos] = useState(null);
@@ -1378,7 +1870,7 @@ function SceneShapes({ shapes, selectedId, onSelect, isDraggable, onDragStart })
       {shapes.map(shape => (
         <Shape3D key={shape.id} shape={shape}
           isSelected={selectedId === shape.id} onSelect={onSelect || (() => {})}
-          isDraggable={isDraggable} onDrag={onDragStart} />
+          isDraggable={isDraggable} />
       ))}
     </>
   );
@@ -1407,7 +1899,7 @@ function MiniScene({ shapes, bounds, unit, pxPerUnit }) {
       {shapes.map(shape => (
         <Shape3D key={shape.id} shape={shape}
           isSelected={false} onSelect={() => {}}
-          isDraggable={false} onDrag={() => {}} />
+          isDraggable={false} />
       ))}
     </>
   );
@@ -1477,17 +1969,70 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
   const [selectedId, setSelectedId] = useState(null);
   const [localShapes, setLocalShapes] = useState(shapes);
   const [viewPreset, setViewPreset] = useState('perspective');
-  const [dragState, setDragState] = useState(null);
   const [addingElement, setAddingElement] = useState(null);
   const [showSixViews, setShowSixViews] = useState(false);
   const [origin, setOrigin] = useState({ x: 0, y: 0 });
   const [draggingOrigin, setDraggingOrigin] = useState(false);
-  const [unit, setUnit] = useState('px');
-  const [pxPerUnit, setPxPerUnit] = useState(UNIT_DEFS.px.defaultPPU);
-  const [ratioLocked, setRatioLocked] = useState(false);
+  const [linkingFrom, setLinkingFrom] = useState(null); // shapeId we're linking FROM (group mode)
+  const [unit, setUnit] = useState(() => {
+    try { const v = localStorage.getItem('pp3d_unit'); return v && UNIT_DEFS[v] ? v : 'px'; } catch { return 'px'; }
+  });
+  const [pxPerUnit, setPxPerUnit] = useState(() => {
+    try { const v = parseFloat(localStorage.getItem('pp3d_pxPerUnit')); return v > 0 ? v : UNIT_DEFS.px.defaultPPU; } catch { return UNIT_DEFS.px.defaultPPU; }
+  });
+  const [ratioLocked, setRatioLocked] = useState(() => {
+    try { return localStorage.getItem('pp3d_ratioLocked') === 'true'; } catch { return false; }
+  });
   const [polarAngle, setPolarAngle] = useState(Math.PI / 4); // ~45° default
+  const [moveLock, setMoveLock] = useState(false); // when true, orbit is disabled; only object dragging works
+  const [snapToGrid, setSnapToGrid] = useState(false); // snap dragged objects to grid
+  const [measureMode, setMeasureMode] = useState(false); // measurement tool active
+  const [measurePoints, setMeasurePoints] = useState([]); // [{x,y}] clicked measure points
+  const clipboardRef = useRef(null); // copied shape data for paste
   const controlsRef = useRef();
   const meshInteractedRef = useRef(false); // prevents onPointerMissed from deselecting after a mesh click
+  const dragActiveRef = useRef(false);      // true while a drag is in progress — suppresses onClick toggle
+  const shapesRef = useRef(localShapes);    // always-current shapes for DOM drag system
+
+  // ─── Undo / Redo history ───
+  const undoStackRef = useRef([]);    // past states (most recent at end)
+  const redoStackRef = useRef([]);    // future states
+  const isUndoRedoRef = useRef(false); // flag to skip pushing when restoring
+  const MAX_UNDO = 80;
+
+  // Push current state to undo stack before any mutation
+  const pushUndo = useCallback((currentShapes) => {
+    if (isUndoRedoRef.current) return;
+    undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), JSON.parse(JSON.stringify(currentShapes))];
+    redoStackRef.current = []; // clear redo on new action
+  }, []);
+
+  const undo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    const prev = undoStackRef.current.pop();
+    redoStackRef.current.push(JSON.parse(JSON.stringify(shapesRef.current)));
+    isUndoRedoRef.current = true;
+    setLocalShapes(prev);
+    onShapesChange?.(prev);
+    shapesRef.current = prev;
+    isUndoRedoRef.current = false;
+  }, [onShapesChange]);
+
+  const redo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    const next = redoStackRef.current.pop();
+    undoStackRef.current.push(JSON.parse(JSON.stringify(shapesRef.current)));
+    isUndoRedoRef.current = true;
+    setLocalShapes(next);
+    onShapesChange?.(next);
+    shapesRef.current = next;
+    isUndoRedoRef.current = false;
+  }, [onShapesChange]);
+
+  // Persist unit settings to localStorage
+  useEffect(() => { try { localStorage.setItem('pp3d_unit', unit); } catch {} }, [unit]);
+  useEffect(() => { try { localStorage.setItem('pp3d_pxPerUnit', String(pxPerUnit)); } catch {} }, [pxPerUnit]);
+  useEffect(() => { try { localStorage.setItem('pp3d_ratioLocked', String(ratioLocked)); } catch {} }, [ratioLocked]);
 
   // Derived unit helpers
   const uDef = UNIT_DEFS[unit];
@@ -1519,17 +2064,47 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
   const isTopDown = viewPreset === 'top';
 
   useEffect(() => { setLocalShapes(shapes); }, [shapes]);
+  useEffect(() => { shapesRef.current = localShapes; }, [localShapes]);
 
   const bounds = useMemo(() => computeBounds(localShapes), [localShapes]);
 
   const handleSelect = useCallback((id) => {
+    // If a drag is active or just finished, don't toggle — the drag already set selection
+    if (dragActiveRef.current) return;
     meshInteractedRef.current = true;
-    // Clear the flag after a short delay so the next onPointerMissed doesn't get blocked
-    setTimeout(() => { meshInteractedRef.current = false; }, 100);
+    setTimeout(() => { meshInteractedRef.current = false; }, 150);
+
+    // If we're in linking mode, link the two shapes
+    if (linkingFrom && id !== linkingFrom) {
+      pushUndo(shapesRef.current);
+      setLocalShapes(prev => {
+        const srcShape = prev.find(s => s.id === linkingFrom);
+        const existingGroupId = srcShape?.groupId;
+        const tgtShape = prev.find(s => s.id === id);
+        const tgtGroupId = tgtShape?.groupId;
+        // Use existing groupId if source already has one, else generate new
+        const gid = existingGroupId || tgtGroupId ||
+          (crypto.randomUUID ? crypto.randomUUID() : `grp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+        const next = prev.map(s => {
+          if (s.id === linkingFrom || s.id === id) return { ...s, groupId: gid };
+          // Also pull in any shapes from either existing group
+          if (existingGroupId && s.groupId === existingGroupId) return { ...s, groupId: gid };
+          if (tgtGroupId && s.groupId === tgtGroupId) return { ...s, groupId: gid };
+          return s;
+        });
+        onShapesChange?.(next);
+        return next;
+      });
+      setLinkingFrom(null);
+      setSelectedId(id);
+      return;
+    }
+
     setSelectedId(prev => prev === id ? null : id);
-  }, []);
+  }, [linkingFrom, pushUndo, onShapesChange]);
 
   const handleUpdateShape = useCallback((id, updates) => {
+    pushUndo(shapesRef.current);
     setLocalShapes(prev => {
       const next = prev.map(s => {
         if (s.id !== id) return s;
@@ -1567,14 +2142,17 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
     });
   }, [onShapesChange]);
 
-  const handleDeselect = useCallback(() => {
-    // Skip deselect if a mesh was just clicked (prevents panel flicker)
-    if (meshInteractedRef.current) return;
+  const handleDeselect = useCallback((e) => {
+    // Skip deselect if a mesh was just clicked or drag is active
+    if (meshInteractedRef.current || dragActiveRef.current) return;
+    // Only deselect if the click was actually on the canvas (not on overlay UI)
+    if (e && e.target && e.target.tagName && e.target.tagName !== 'CANVAS') return;
     setSelectedId(null);
   }, []);
 
   // Delete selected element
   const handleDeleteShape = useCallback((id) => {
+    pushUndo(shapesRef.current);
     setLocalShapes(prev => {
       const next = prev.filter(s => s.id !== id);
       onShapesChange?.(next);
@@ -1583,24 +2161,113 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
     setSelectedId(null);
   }, [onShapesChange]);
 
-  // Keyboard shortcut: Delete / Backspace removes selected element
+  // Keyboard shortcuts: Delete, Undo (Ctrl+Z), Redo (Ctrl+Y / Ctrl+Shift+Z)
   useEffect(() => {
     const onKey = (e) => {
+      // Don't handle if user is typing in an input
+      const tag = e.target.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      // Escape: cancel linking mode
+      if (e.key === 'Escape') {
+        if (linkingFrom) { setLinkingFrom(null); return; }
+        if (selectedId) { setSelectedId(null); return; }
+        return;
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-        // Don't delete if user is typing in an input
-        const tag = e.target.tagName.toLowerCase();
-        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         e.preventDefault();
         handleDeleteShape(selectedId);
+        return;
+      }
+      // Undo: Ctrl+Z (or Cmd+Z on Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      // Redo: Ctrl+Y or Ctrl+Shift+Z (or Cmd equivalents)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey) || (e.key === 'Z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      // Copy: Ctrl+C
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedId) {
+        e.preventDefault();
+        const shape = shapesRef.current.find(s => s.id === selectedId);
+        if (shape) {
+          clipboardRef.current = JSON.parse(JSON.stringify(shape));
+        }
+        return;
+      }
+      // Paste: Ctrl+V
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current) {
+        e.preventDefault();
+        pushUndo(shapesRef.current);
+        const src = clipboardRef.current;
+        const newId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const offset = 30; // px offset so pasted shape doesn't overlap original
+        const pasted = { ...JSON.parse(JSON.stringify(src)), id: newId, groupId: undefined };
+        pasted.x = (pasted.x || 0) + offset;
+        pasted.y = (pasted.y || 0) + offset;
+        pasted.name = (pasted.name || pasted.type) + ' (copy)';
+        // Offset points for point-based shapes
+        if (pasted.points && pasted.points.length >= 4) {
+          pasted.points = pasted.points.map((v, i) => v + offset);
+        }
+        setLocalShapes(prev => {
+          const next = [...prev, pasted];
+          onShapesChange?.(next);
+          shapesRef.current = next;
+          return next;
+        });
+        setSelectedId(newId);
+        return;
+      }
+      // Duplicate: Ctrl+D
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedId) {
+        e.preventDefault();
+        const shape = shapesRef.current.find(s => s.id === selectedId);
+        if (!shape) return;
+        pushUndo(shapesRef.current);
+        const newId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const offset = 30;
+        const dup = { ...JSON.parse(JSON.stringify(shape)), id: newId, groupId: undefined };
+        dup.x = (dup.x || 0) + offset;
+        dup.y = (dup.y || 0) + offset;
+        dup.name = (dup.name || dup.type) + ' (copy)';
+        if (dup.points && dup.points.length >= 4) {
+          dup.points = dup.points.map((v, i) => v + offset);
+        }
+        setLocalShapes(prev => {
+          const next = [...prev, dup];
+          onShapesChange?.(next);
+          shapesRef.current = next;
+          return next;
+        });
+        setSelectedId(newId);
+        return;
+      }
+      // Toggle snap: Ctrl+G
+      if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+        e.preventDefault();
+        setSnapToGrid(prev => !prev);
+        return;
+      }
+      // Toggle measure: M key
+      if (e.key === 'm' || e.key === 'M') {
+        setMeasureMode(prev => { if (prev) setMeasurePoints([]); return !prev; });
+        return;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, handleDeleteShape]);
+  }, [selectedId, handleDeleteShape, undo, redo, linkingFrom, pushUndo, onShapesChange]);
 
   // Add new element
   const handleAddElement = useCallback((dims, name) => {
     if (!addingElement) return;
+    pushUndo(shapesRef.current);
     const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const cx = (bounds.cx / SCALE) || 200;
     const cy = (-bounds.cz / SCALE) || 200;
@@ -1643,35 +2310,124 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
     setAddingElement(null);
   }, [addingElement, bounds, onShapesChange]);
 
-  // Drag handlers — works in all views
-  const handleDragStart = useCallback((e, shapeId) => {
-    e.stopPropagation();
+  // ─── DOM-level drag callbacks (called by DomDragSystem) ───
+  const handleDomDragStart = useCallback((shapeId) => {
+    pushUndo(shapesRef.current);
     meshInteractedRef.current = true;
-    setTimeout(() => { meshInteractedRef.current = false; }, 200);
-    setDragState({ shapeId });
+    dragActiveRef.current = true;
     setSelectedId(shapeId);
-    if (controlsRef.current) controlsRef.current.enabled = false;
+  }, [pushUndo]);
+
+  // Move a single shape by a delta (dx, dy) and optionally set absolute z
+  const moveShapeByDelta = (s, dx, dy, dz) => {
+    const zUpdate = dz !== undefined ? { z: (s.z || 0) + dz } : {};
+
+    // Point-based shapes: move all points
+    if (s.points && s.points.length >= 4 &&
+        ['pipe', 'cable', 'line', 'path_line'].includes(s.type)) {
+      const newPoints = [...s.points];
+      for (let i = 0; i < newPoints.length; i += 2) {
+        newPoints[i] = Math.round(newPoints[i] + dx);
+        newPoints[i + 1] = Math.round(newPoints[i + 1] + dy);
+      }
+      return { ...s, x: (s.x || 0) + dx, y: (s.y || 0) + dy, points: newPoints, ...zUpdate };
+    }
+    return { ...s, x: (s.x || 0) + dx, y: (s.y || 0) + dy, ...zUpdate };
+  };
+
+  // Get center of a shape in 2D px
+  const getShapeCenter = (s) => {
+    if (s.points && s.points.length >= 4 &&
+        ['pipe', 'cable', 'line', 'path_line'].includes(s.type)) {
+      let sumX = 0, sumY = 0, n = 0;
+      for (let i = 0; i < s.points.length; i += 2) {
+        sumX += s.points[i]; sumY += s.points[i + 1]; n++;
+      }
+      return { cx: sumX / n, cy: sumY / n };
+    }
+    if (s.type === 'rectangle' || s.type === 'wall' || s.type === 'path' || s.type === 'road') {
+      return {
+        cx: (s.x || 0) + (s.width || 50) / 2,
+        cy: (s.y || 0) + (s.height || s.thickness || s.pathWidth || s.roadWidth || 50) / 2,
+      };
+    }
+    if (s.type === 'house') {
+      return {
+        cx: (s.x || 0) + (s.houseLength || s.width || 120) / 2,
+        cy: (s.y || 0) + (s.houseWidth || s.depth || 100) / 2,
+      };
+    }
+    return { cx: s.x || 0, cy: s.y || 0 };
+  };
+
+  const snapRef = useRef(snapToGrid);
+  useEffect(() => { snapRef.current = snapToGrid; }, [snapToGrid]);
+
+  const handleDomDragMove = useCallback((shapeId, newCenterX, newCenterY, newZ) => {
+    // Apply snap-to-grid if enabled
+    const gridSnap = snapRef.current ? (uDef.gridCell * pxPerUnit) : 1;
+    const snap = (v) => snapRef.current ? Math.round(v / gridSnap) * gridSnap : Math.round(v);
+    const cx = snap(newCenterX);
+    const cy = snap(newCenterY);
+    setLocalShapes(prev => {
+      const draggedShape = prev.find(s => s.id === shapeId);
+      if (!draggedShape) return prev;
+
+      // Compute delta from old center of dragged shape
+      const oldCenter = getShapeCenter(draggedShape);
+      const dx = cx - Math.round(oldCenter.cx);
+      const dy = cy - Math.round(oldCenter.cy);
+      const dz = newZ != null ? Math.round(newZ) - (draggedShape.z || 0) : undefined;
+
+      // Find group members (if any)
+      const groupId = draggedShape.groupId;
+
+      const next = prev.map(s => {
+        if (s.id === shapeId) {
+          return moveShapeByDelta(s, dx, dy, dz);
+        }
+        // Move group members by same delta (but not z — only dragged shape gets z change)
+        if (groupId && s.groupId === groupId) {
+          return moveShapeByDelta(s, dx, dy, undefined);
+        }
+        return s;
+      });
+      shapesRef.current = next;
+      return next;
+    });
   }, []);
 
-  const handleDragMove = useCallback((shapeId, newX, newY) => {
-    setLocalShapes(prev => prev.map(s => {
-      if (s.id !== shapeId) return s;
-      if (s.type === 'rectangle' || s.type === 'wall' || s.type === 'path' || s.type === 'road') {
-        return { ...s, x: newX - (s.width || 50) / 2, y: newY - (s.height || s.thickness || s.pathWidth || s.roadWidth || 50) / 2 };
-      }
-      if (s.type === 'house') {
-        return { ...s, x: newX - (s.houseLength || s.width || 120) / 2, y: newY - (s.houseWidth || s.depth || 100) / 2 };
-      }
-      return { ...s, x: newX, y: newY };
-    }));
+  const handleDomDragEnd = useCallback(() => {
+    // Persist the current shapes
+    onShapesChange?.(shapesRef.current);
+    // Keep dragActiveRef true briefly so the onClick that fires right after pointerUp doesn't toggle
+    setTimeout(() => {
+      dragActiveRef.current = false;
+      meshInteractedRef.current = false;
+    }, 150);
+  }, [onShapesChange]);
+
+  // ─── Group / Link handlers ───
+  // ─── Measurement point handler ───
+  const handleMeasurePoint = useCallback((pt) => {
+    setMeasurePoints(prev => {
+      if (prev.length >= 2) return [pt]; // start new measurement
+      return [...prev, pt];
+    });
   }, []);
 
-  const handleDragEnd = useCallback(() => {
-    if (dragState) onShapesChange?.(localShapes);
-    setDragState(null);
-    document.body.style.cursor = '';
-    if (controlsRef.current) controlsRef.current.enabled = true;
-  }, [dragState, localShapes, onShapesChange]);
+  const handleLinkStart = useCallback((shapeId) => {
+    setLinkingFrom(shapeId);
+  }, []);
+
+  const handleUngroup = useCallback((groupId) => {
+    pushUndo(shapesRef.current);
+    setLocalShapes(prev => {
+      const next = prev.map(s => s.groupId === groupId ? { ...s, groupId: undefined } : s);
+      onShapesChange?.(next);
+      return next;
+    });
+  }, [onShapesChange, pushUndo]);
 
   // ─── Origin drag handlers ───
   const handleOriginDragStart = useCallback((e) => {
@@ -1691,6 +2447,7 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
 
   // ─── Wall Continuation: spawn a new wall connected to the selected wall's endpoint ───
   const handleContinueWall = useCallback((sourceWall, fromEnd) => {
+    pushUndo(shapesRef.current);
     const endpoints = getWallEndpoints(sourceWall);
     const anchor = fromEnd === 'end' ? endpoints.end : endpoints.start;
     const srcRot = sourceWall.rotation || 0;
@@ -1745,7 +2502,15 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
       >
         <color attach="background" args={['#050807']} />
         <ViewTransitioner viewPreset={viewPreset} bounds={bounds} controlsRef={controlsRef} />
-        {dragState && <DragHandler dragState={dragState} onMove={handleDragMove} onEnd={handleDragEnd} viewPreset={viewPreset} />}
+        <DomDragSystem
+          controlsRef={controlsRef}
+          shapesRef={shapesRef}
+          onDragStart={handleDomDragStart}
+          onDragMove={handleDomDragMove}
+          onDragEnd={handleDomDragEnd}
+          viewPreset={viewPreset}
+          moveLock={moveLock}
+        />
         <CursorCrosshair viewPreset={viewPreset} />
         {!isTopDown && <ElevationSync controlsRef={controlsRef} onAngleChange={handleAngleSync} />}
 
@@ -1781,8 +2546,18 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
         {localShapes.map(shape => (
           <Shape3D key={shape.id} shape={shape}
             isSelected={selectedId === shape.id} onSelect={handleSelect}
-            isDraggable={true} onDrag={handleDragStart} onDragEnd={handleDragEnd} />
+            isDraggable={true} />
         ))}
+
+        {/* Measurement tool */}
+        {measureMode && <MeasureClickHandler active={measureMode} onPoint={handleMeasurePoint} />}
+        {measurePoints.length >= 2 && <MeasureLine3D points={measurePoints} unit={unit} pxPerUnit={pxPerUnit} />}
+        {measurePoints.length === 1 && (
+          <mesh position={[measurePoints[0].x * SCALE, 0.1, -measurePoints[0].y * SCALE]}>
+            <sphereGeometry args={[0.04, 8, 8]} />
+            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.5} />
+          </mesh>
+        )}
 
         {/* Origin / Reference Point */}
         <OriginMarker3D origin={origin} onDragOrigin={handleOriginDragStart} isTopDown={isTopDown} />
@@ -1791,14 +2566,17 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08}
           minDistance={1} maxDistance={80}
           maxPolarAngle={isTopDown ? 0.01 : Math.PI / 2 - 0.05}
-          enableRotate={!isTopDown}
+          enableRotate={!isTopDown && !moveLock}
+          enablePan={!moveLock}
+          enableZoom={!moveLock}
           mouseButtons={{
-            LEFT: isTopDown ? undefined : THREE.MOUSE.ROTATE,
-            MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN,
+            LEFT: (isTopDown || moveLock) ? undefined : THREE.MOUSE.ROTATE,
+            MIDDLE: moveLock ? undefined : THREE.MOUSE.DOLLY,
+            RIGHT: moveLock ? undefined : THREE.MOUSE.PAN,
           }}
           touches={{
-            ONE: isTopDown ? undefined : THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_PAN,
+            ONE: (isTopDown || moveLock) ? undefined : THREE.TOUCH.ROTATE,
+            TWO: moveLock ? undefined : THREE.TOUCH.DOLLY_PAN,
           }}
           target={[bounds.cx, 0, bounds.cz]} />
       </Canvas>
@@ -1819,6 +2597,39 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
           onClick={() => setShowSixViews(!showSixViews)} title="6-View Engineering Projection">
           <span className="three-view-icon">📐</span>
           <span className="three-view-label">6-View</span>
+        </button>
+        <div style={{ height: '1px', background: 'rgba(52,211,153,0.2)', margin: '4px 0' }} />
+        <button className={`three-view-btn ${moveLock ? 'active' : ''}`}
+          onClick={() => setMoveLock(!moveLock)}
+          title={moveLock ? 'Unlock orbit (currently: move-only mode)' : 'Lock orbit — only move objects'}>
+          <span className="three-view-icon">{moveLock ? '🔒' : '🔓'}</span>
+          <span className="three-view-label">{moveLock ? 'Locked' : 'Move'}</span>
+        </button>
+        <div style={{ height: '1px', background: 'rgba(52,211,153,0.2)', margin: '4px 0' }} />
+        <button className="three-view-btn"
+          onClick={undo}
+          title="Undo (Ctrl+Z)">
+          <span className="three-view-icon">↩️</span>
+          <span className="three-view-label">Undo</span>
+        </button>
+        <button className="three-view-btn"
+          onClick={redo}
+          title="Redo (Ctrl+Y)">
+          <span className="three-view-icon">↪️</span>
+          <span className="three-view-label">Redo</span>
+        </button>
+        <div style={{ height: '1px', background: 'rgba(52,211,153,0.2)', margin: '4px 0' }} />
+        <button className={`three-view-btn ${snapToGrid ? 'active' : ''}`}
+          onClick={() => setSnapToGrid(!snapToGrid)}
+          title={`Snap to grid (Ctrl+G) — ${snapToGrid ? 'ON' : 'OFF'}`}>
+          <span className="three-view-icon">{snapToGrid ? '🧲' : '🔘'}</span>
+          <span className="three-view-label">Snap</span>
+        </button>
+        <button className={`three-view-btn ${measureMode ? 'active' : ''}`}
+          onClick={() => { setMeasureMode(!measureMode); if (measureMode) setMeasurePoints([]); }}
+          title="Measurement tool (M key)">
+          <span className="three-view-icon">📏</span>
+          <span className="three-view-label">Measure</span>
         </button>
       </div>
 
@@ -1852,10 +2663,26 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
         <div className="three-stats glass">
           {localShapes.length} object{localShapes.length !== 1 ? 's' : ''}
         </div>
+        {linkingFrom && (
+          <div className="three-link-banner glass" style={{
+            background: 'rgba(96,165,250,0.25)', border: '1px solid rgba(96,165,250,0.5)',
+            padding: '6px 14px', borderRadius: 8, fontSize: 13, color: '#93c5fd',
+            display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto', zIndex: 25,
+          }}>
+            🔗 Click another object to link • <button
+              onClick={() => setLinkingFrom(null)}
+              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#93c5fd',
+                padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              Cancel (Esc)
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="three-overlay-bottom glass">
-        {isTopDown ? (
+        {measureMode ? (
+          <span style={{ color: '#fbbf24' }}>📏 Measure: {measurePoints.length === 0 ? 'Click first point' : measurePoints.length === 1 ? 'Click second point' : 'Done! Click to start new'} (M to exit)</span>
+        ) : isTopDown ? (
           <>
             <span>🖱️ Drag to place</span>
             <span>⇧ Right-click pan</span>
@@ -1868,6 +2695,7 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
             <span>🔍 Zoom</span>
           </>
         )}
+        {snapToGrid && <span style={{ color: '#34d399' }}>🧲 Snap ON</span>}
       </div>
 
       {selectedId && (() => {
@@ -1978,6 +2806,9 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
         origin={origin}
         unit={unit}
         pxPerUnit={pxPerUnit}
+        onLinkStart={handleLinkStart}
+        onUngroup={handleUngroup}
+        linkingFrom={linkingFrom}
       />
 
       {/* 6-View Engineering Projection Panel */}

@@ -30,14 +30,14 @@ class DynamoStorage(StorageBackend):
     def list_plots(self) -> List[dict]:
         table = get_table()
         response = table.scan(
-            ProjectionExpression="id, #n, createdAt, updatedAt",
+            ProjectionExpression="id, #n, shapeCount, createdAt, updatedAt",
             ExpressionAttributeNames={"#n": "name"},
         )
         items = response.get("Items", [])
 
         while "LastEvaluatedKey" in response:
             response = table.scan(
-                ProjectionExpression="id, #n, createdAt, updatedAt",
+                ProjectionExpression="id, #n, shapeCount, createdAt, updatedAt",
                 ExpressionAttributeNames={"#n": "name"},
                 ExclusiveStartKey=response["LastEvaluatedKey"],
             )

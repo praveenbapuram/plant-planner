@@ -27,11 +27,60 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   
+  const [libraryTemplates, setLibraryTemplates] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pp_library') || '[]'); } catch { return []; }
+  });
+  const [showLibrary, setShowLibrary] = useState(false);
+
+  const saveToLibrary = useCallback((name) => {
+    const template = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: name || `Template ${libraryTemplates.length + 1}`,
+      shapes: JSON.parse(JSON.stringify(currentShapes)),
+      createdAt: new Date().toISOString(),
+      shapeCount: currentShapes.length,
+    };
+    const updated = [...libraryTemplates, template];
+    setLibraryTemplates(updated);
+    try { localStorage.setItem('pp_library', JSON.stringify(updated)); } catch {}
+    showToast('success', `Saved "${template.name}" to library`, 'Library');
+  }, [currentShapes, libraryTemplates]);
+
+  const loadFromLibrary = useCallback((template) => {
+    const shapes = JSON.parse(JSON.stringify(template.shapes));
+    setCurrentShapes(shapes);
+    setShapesToLoad(shapes);
+    showToast('success', `Loaded "${template.name}" (${shapes.length} objects)`, 'Library');
+  }, []);
+
+  const deleteFromLibrary = useCallback((templateId) => {
+    const updated = libraryTemplates.filter(t => t.id !== templateId);
+    setLibraryTemplates(updated);
+    try { localStorage.setItem('pp_library', JSON.stringify(updated)); } catch {}
+    showToast('info', 'Template removed from library', 'Library');
+  }, [libraryTemplates]);
+
   const canvasRef = useRef(null);
 
-  // Load existing layouts on mount
+  // Load existing layouts on mount + restore last active plot
   useEffect(() => {
-    loadPlots();
+    const init = async () => {
+      await loadPlots();
+      // Restore last active plot from localStorage
+      const lastPlotId = localStorage.getItem('plantplanner_activePlotId');
+      if (lastPlotId) {
+        try {
+          const plot = await getPlot(lastPlotId);
+          setActivePlot(plot);
+          const shapes = plot.geojson || [];
+          setShapesToLoad(shapes);
+          setCurrentShapes(shapes);
+        } catch {
+          localStorage.removeItem('plantplanner_activePlotId');
+        }
+      }
+    };
+    init();
   }, []);
 
   const loadPlots = async () => {
@@ -52,7 +101,8 @@ export default function App() {
       setActivePlot(plot);
       const shapes = plot.geojson || [];
       setShapesToLoad(shapes);
-      setCurrentShapes(shapes);   // Keep currentShapes in sync so 3D view + save always have latest data
+      setCurrentShapes(shapes);
+      localStorage.setItem('plantplanner_activePlotId', plot.id);
       showToast('success', `Loaded: ${plot.name}`, 'Project Open');
     } catch (err) {
       showToast('error', 'Could not open project', 'Error');
@@ -63,6 +113,7 @@ export default function App() {
     setActivePlot(null);
     setShapesToLoad([]);
     setCurrentShapes([]);
+    localStorage.removeItem('plantplanner_activePlotId');
     if (canvasRef.current?.clearDrawings) canvasRef.current.clearDrawings();
     showToast('info', 'Starting a new blank layout', 'New Layout');
   }, []);
@@ -73,10 +124,12 @@ export default function App() {
       if (activePlot) {
         const updated = await updatePlot(activePlot.id, { name, geojson: currentShapes });
         setActivePlot(updated);
+        localStorage.setItem('plantplanner_activePlotId', updated.id);
         showToast('success', 'Changes saved successfully', 'Update Success');
       } else {
         const created = await createPlot(name, currentShapes);
         setActivePlot(created);
+        localStorage.setItem('plantplanner_activePlotId', created.id);
         showToast('success', 'New layout created', 'Project Saved');
       }
       loadPlots();
@@ -109,6 +162,53 @@ export default function App() {
               🧊 3D
             </button>
           </div>
+          {/* Import / Export JSON */}
+          {!isMobile && (
+            <>
+              <button className="btn btn-secondary" title="Import layout from JSON file" onClick={() => document.getElementById('json-import-input')?.click()}>
+                📥 Import
+              </button>
+              <button className="btn btn-secondary" title="Export layout as JSON file" onClick={() => {
+                const blob = new Blob([JSON.stringify(currentShapes, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${activePlot?.name || 'layout'}-${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('success', 'Layout exported as JSON', 'Export');
+              }}>
+                📤 Export
+              </button>
+              <input id="json-import-input" type="file" accept=".json,application/json" style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    try {
+                      const data = JSON.parse(ev.target.result);
+                      if (Array.isArray(data)) {
+                        setCurrentShapes(data);
+                        setShapesToLoad(data);
+                        showToast('success', `Imported ${data.length} objects`, 'Import');
+                      } else if (data.shapes && Array.isArray(data.shapes)) {
+                        setCurrentShapes(data.shapes);
+                        setShapesToLoad(data.shapes);
+                        showToast('success', `Imported ${data.shapes.length} objects`, 'Import');
+                      } else {
+                        showToast('error', 'Invalid JSON format — expected an array of shapes', 'Import Error');
+                      }
+                    } catch (err) {
+                      showToast('error', 'Could not parse JSON file', 'Import Error');
+                    }
+                  };
+                  reader.readAsText(file);
+                  e.target.value = ''; // reset so same file can be re-imported
+                }}
+              />
+            </>
+          )}
           {isMobile ? (
             <button className="btn btn-primary" onClick={() => setIsSaveDialogOpen(true)}>💾 Save</button>
           ) : (
@@ -124,23 +224,133 @@ export default function App() {
 
       {/* LEFT SIDEBAR: Project Library */}
       <aside className={`sidebar-left ${isSidebarOpen ? 'open' : 'collapsed'}`}>
-        <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '1px' }}>Project Library</h3>
+        {/* Tab switcher: Projects / Library */}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+            <button
+              className={`btn ${!showLibrary ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: 11, padding: '5px 12px', flex: 1 }}
+              onClick={() => setShowLibrary(false)}>
+              📁 Projects
+            </button>
+            <button
+              className={`btn ${showLibrary ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: 11, padding: '5px 12px', flex: 1 }}
+              onClick={() => setShowLibrary(true)}>
+              📚 Library
+            </button>
+          </div>
           {isMobile && <button className="btn btn-ghost" onClick={() => setIsSidebarOpen(false)}>✕</button>}
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
-          {plots.map(p => (
-            <div 
-              key={p.id} 
-              className={`card ${activePlot?.id === p.id ? 'active' : ''}`}
-              style={{ marginBottom: '8px', cursor: 'pointer', borderColor: activePlot?.id === p.id ? 'var(--accent-primary)' : '' }}
-              onClick={() => { handleSelectPlot(p.id); if(isMobile) setIsSidebarOpen(false); }}
-            >
-              <div style={{ fontWeight: 600, fontSize: '14px' }}>{p.name}</div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{p.geojson?.length || 0} objects</div>
-            </div>
-          ))}
-        </div>
+
+        {!showLibrary ? (
+          /* ── Projects Tab ── */
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+            {plots.map(p => (
+              <div
+                key={p.id}
+                className={`card ${activePlot?.id === p.id ? 'active' : ''}`}
+                style={{ marginBottom: '8px', cursor: 'pointer', borderColor: activePlot?.id === p.id ? 'var(--accent-primary)' : '' }}
+                onClick={() => { handleSelectPlot(p.id); if(isMobile) setIsSidebarOpen(false); }}
+              >
+                <div style={{ fontWeight: 600, fontSize: '14px' }}>{p.name}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{p.shapeCount ?? p.geojson?.length ?? 0} objects</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* ── Library Tab ── */
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Save to Library */}
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', fontSize: 12 }}
+              disabled={currentShapes.length === 0}
+              onClick={() => {
+                const name = prompt('Template name:', activePlot?.name || `Template ${libraryTemplates.length + 1}`);
+                if (name) saveToLibrary(name);
+              }}>
+              + Save Current Layout to Library
+            </button>
+            {/* Import JSON to Library */}
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', fontSize: 12 }}
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json,application/json';
+                input.onchange = (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    try {
+                      const data = JSON.parse(ev.target.result);
+                      const shapes = Array.isArray(data) ? data : (data.shapes || []);
+                      if (shapes.length === 0) { showToast('error', 'No shapes found in file', 'Import Error'); return; }
+                      const name = prompt('Template name:', file.name.replace('.json', ''));
+                      if (!name) return;
+                      const template = {
+                        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                        name,
+                        shapes: shapes,
+                        createdAt: new Date().toISOString(),
+                        shapeCount: shapes.length,
+                      };
+                      const updated = [...libraryTemplates, template];
+                      setLibraryTemplates(updated);
+                      try { localStorage.setItem('pp_library', JSON.stringify(updated)); } catch {}
+                      showToast('success', `"${name}" added to library`, 'Library');
+                    } catch { showToast('error', 'Invalid JSON', 'Import Error'); }
+                  };
+                  reader.readAsText(file);
+                };
+                input.click();
+              }}>
+              📥 Import JSON to Library
+            </button>
+
+            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
+
+            {libraryTemplates.length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                No templates yet. Save a layout or import a JSON file to build your library.
+              </div>
+            ) : (
+              libraryTemplates.map(t => (
+                <div key={t.id} className="card" style={{ marginBottom: 0, position: 'relative' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {t.shapeCount} objects • {new Date(t.createdAt).toLocaleDateString()}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                    <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 10px', flex: 1 }}
+                      onClick={() => loadFromLibrary(t)}>
+                      Load
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}
+                      title="Export as JSON"
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(t.shapes, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = `${t.name}.json`; a.click();
+                        URL.revokeObjectURL(url);
+                      }}>
+                      📤
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px', color: '#f87171' }}
+                      title="Delete template"
+                      onClick={() => { if (confirm(`Delete "${t.name}"?`)) deleteFromLibrary(t.id); }}>
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </aside>
 
       {/* MAIN CANVAS AREA */}

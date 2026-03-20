@@ -28,5 +28,6 @@ class PlotSummary(BaseModel):
     """Response model for plot list (no geojson body)."""
     id: str
     name: str
+    shapeCount: int = 0
     createdAt: str
     updatedAt: str

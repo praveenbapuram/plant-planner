@@ -161,8 +161,10 @@
   width: 240px;
   padding: 16px;
   border-radius: var(--radius-lg, 18px);
-  z-index: 10;
+  z-index: 20;
   animation: slideInRight3d 0.25s ease-out;
+  max-height: calc(100% - 80px);
+  overflow-y: auto;
 }
 
 @keyframes slideInRight3d {
@@ -928,4 +930,93 @@
   color: #a7f3d0;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* ─── Road Surface Selector ──────────────────────────────────────── */
+.three-surface-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.three-surface-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  color: #cbd5e1;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.three-surface-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+}
+.three-surface-btn.active {
+  background: rgba(52,211,153,0.15);
+  border-color: rgba(52,211,153,0.5);
+  color: #a7f3d0;
+}
+.three-surface-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.15);
+  flex-shrink: 0;
+}
+.three-surface-name {
+  white-space: nowrap;
+}
+
+/* ─── Group / Link Controls ──────────────────────────────────────── */
+.three-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.three-group-badge {
+  font-size: 12px;
+  color: #93c5fd;
+  font-weight: 600;
+}
+.three-group-count {
+  font-size: 11px;
+  color: rgba(147,197,253,0.6);
+}
+.three-group-btn {
+  background: rgba(96,165,250,0.15);
+  border: 1px solid rgba(96,165,250,0.3);
+  color: #93c5fd;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.three-group-btn:hover {
+  background: rgba(96,165,250,0.3);
+  border-color: rgba(96,165,250,0.5);
+}
+.three-ungroup-btn {
+  background: rgba(248,113,113,0.15);
+  border-color: rgba(248,113,113,0.3);
+  color: #fca5a5;
+}
+.three-ungroup-btn:hover {
+  background: rgba(248,113,113,0.3);
+  border-color: rgba(248,113,113,0.5);
+}
+.three-group-linking {
+  font-size: 12px;
+  color: #93c5fd;
+  animation: three-link-pulse 1.2s ease-in-out infinite;
+}
+@keyframes three-link-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
