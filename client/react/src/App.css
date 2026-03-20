@@ -91,3 +91,38 @@
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-subtle);
 }
+
+/* ─── 2D / 3D View Toggle (always visible in header) ─────────── */
+.view-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.view-toggle-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  color: var(--text-secondary, #94a3b8);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.view-toggle-btn.active {
+  background: var(--accent-primary, #34d399);
+  color: #050807;
+  box-shadow: 0 2px 8px rgba(52, 211, 153, 0.3);
+}
+
+.view-toggle-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, #f0fdf4);
+}

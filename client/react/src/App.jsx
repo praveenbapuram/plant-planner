@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import './App.css';
 import KonvaCanvas from './components/KonvaCanvas';
+import ThreeCanvas from './components/ThreeCanvas';
 import JsonDataPreview from './components/JsonDataPreview';
 import SaveDialog from './components/SaveDialog';
 import ToastContainer, { showToast } from './components/Toast';
@@ -17,6 +18,7 @@ export default function App() {
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [viewMode, setViewMode] = useState('3d'); // '2d' | '3d'
   
   // Mobile Detection
   useEffect(() => {
@@ -48,7 +50,9 @@ export default function App() {
     try {
       const plot = await getPlot(plotId);
       setActivePlot(plot);
-      setShapesToLoad(plot.geojson || []);
+      const shapes = plot.geojson || [];
+      setShapesToLoad(shapes);
+      setCurrentShapes(shapes);   // Keep currentShapes in sync so 3D view + save always have latest data
       showToast('success', `Loaded: ${plot.name}`, 'Project Open');
     } catch (err) {
       showToast('error', 'Could not open project', 'Error');
@@ -58,6 +62,7 @@ export default function App() {
   const handleNewPlot = useCallback(() => {
     setActivePlot(null);
     setShapesToLoad([]);
+    setCurrentShapes([]);
     if (canvasRef.current?.clearDrawings) canvasRef.current.clearDrawings();
     showToast('info', 'Starting a new blank layout', 'New Layout');
   }, []);
@@ -95,6 +100,15 @@ export default function App() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          {/* 2D / 3D View Toggle */}
+          <div className="view-toggle">
+            <button className={`view-toggle-btn ${viewMode === '2d' ? 'active' : ''}`} onClick={() => setViewMode('2d')}>
+              ✏️ 2D
+            </button>
+            <button className={`view-toggle-btn ${viewMode === '3d' ? 'active' : ''}`} onClick={() => setViewMode('3d')}>
+              🧊 3D
+            </button>
+          </div>
           {isMobile ? (
             <button className="btn btn-primary" onClick={() => setIsSaveDialogOpen(true)}>💾 Save</button>
           ) : (
@@ -131,11 +145,15 @@ export default function App() {
 
       {/* MAIN CANVAS AREA */}
       <main className="main-content">
-        <KonvaCanvas 
-          shapesToLoad={shapesToLoad}
-          onShapesChange={setCurrentShapes}
-          canvasRef={canvasRef}
-        />
+        {viewMode === '2d' ? (
+          <KonvaCanvas
+            shapesToLoad={shapesToLoad}
+            onShapesChange={setCurrentShapes}
+            canvasRef={canvasRef}
+          />
+        ) : (
+          <ThreeCanvas shapes={currentShapes} onShapesChange={setCurrentShapes} />
+        )}
         
         {/* Floating JSON Peek Button */}
         <div style={{ position: 'absolute', bottom: '20px', left: '20px', zIndex: 10 }}>

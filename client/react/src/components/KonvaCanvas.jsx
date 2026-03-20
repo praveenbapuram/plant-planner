@@ -289,6 +289,115 @@ const PropertiesPanel = ({ shape, onChange, onChangeBatch, onCommit, onDelete, u
         </div>
       )}
 
+      {/* ─── Custom Element Properties ─── */}
+
+      {shape.type === 'tank' && (
+        <div className="input-group">
+          <label className="input-label">Radius ({unit})</label>
+          <input type="number" step="any" className="input" value={local.radius} onChange={(e) => handleChange('radius', e.target.value)} onBlur={onCommit} />
+        </div>
+      )}
+
+      {shape.type === 'house' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="input-group">
+            <label className="input-label">Length ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.houseLength || shape.width || 120)} onChange={(e) => { onChange('houseLength', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Width ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.houseWidth || shape.depth || 100)} onChange={(e) => { onChange('houseWidth', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Wall Ht ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.houseHeight || 80)} onChange={(e) => { onChange('houseHeight', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Roof Ht ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.roofHeight || 40)} onChange={(e) => { onChange('roofHeight', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+        </div>
+      )}
+
+      {shape.type === 'tree' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="input-group">
+            <label className="input-label">Canopy R ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.canopyRadius || 30)} onChange={(e) => { onChange('canopyRadius', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Trunk R ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.trunkRadius || 5)} onChange={(e) => { onChange('trunkRadius', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+        </div>
+      )}
+
+      {shape.type === 'wall' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="input-group">
+            <label className="input-label">Length ({unit})</label>
+            <input type="number" step="any" className="input" value={local.width} onChange={(e) => handleChange('width', e.target.value)} onBlur={onCommit} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Thickness ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.thickness || 10)} onChange={(e) => { onChange('thickness', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+        </div>
+      )}
+
+      {(shape.type === 'pipe' || shape.type === 'cable') && shape.points && (
+        <div className="card" style={{ padding: '12px', background: 'var(--bg-primary)', marginTop: '10px' }}>
+          <label className="input-label" style={{ marginBottom: '10px', display: 'block' }}>Endpoints ({unit})</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {(local.points || []).map((p, i) => i % 2 === 0 && (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '10px', width: '25px', opacity: 0.5 }}>P{i / 2 + 1}</span>
+                <input type="number" step="any" className="input" style={{ padding: '6px' }} value={local.points[i]} onChange={(e) => handlePointChange(i / 2, 'x', e.target.value)} onBlur={onCommit} />
+                <input type="number" step="any" className="input" style={{ padding: '6px' }} value={local.points[i + 1]} onChange={(e) => handlePointChange(i / 2, 'y', e.target.value)} onBlur={onCommit} />
+              </div>
+            ))}
+          </div>
+          {shape.type === 'pipe' && (
+            <div className="input-group" style={{ marginTop: '10px' }}>
+              <label className="input-label">Pipe Radius ({unit})</label>
+              <input type="number" step="any" className="input" value={toUnit(shape.pipeRadius || 5)} onChange={(e) => { onChange('pipeRadius', fromUnit(e.target.value)); }} onBlur={onCommit} />
+            </div>
+          )}
+          {shape.type === 'cable' && (
+            <div className="input-group" style={{ marginTop: '10px' }}>
+              <label className="input-label">Cable Radius ({unit})</label>
+              <input type="number" step="any" className="input" value={toUnit(shape.cableRadius || 2)} onChange={(e) => { onChange('cableRadius', fromUnit(e.target.value)); }} onBlur={onCommit} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {shape.type === 'path' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="input-group">
+            <label className="input-label">Length ({unit})</label>
+            <input type="number" step="any" className="input" value={local.width} onChange={(e) => handleChange('width', e.target.value)} onBlur={onCommit} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Path Width ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.pathWidth || 30)} onChange={(e) => { onChange('pathWidth', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+        </div>
+      )}
+
+      {shape.type === 'road' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="input-group">
+            <label className="input-label">Length ({unit})</label>
+            <input type="number" step="any" className="input" value={local.width} onChange={(e) => handleChange('width', e.target.value)} onBlur={onCommit} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Road Width ({unit})</label>
+            <input type="number" step="any" className="input" value={toUnit(shape.roadWidth || 60)} onChange={(e) => { onChange('roadWidth', fromUnit(e.target.value)); }} onBlur={onCommit} />
+          </div>
+        </div>
+      )}
+
       <div className="input-group" style={{ marginTop: '15px' }}>
         <label className="input-label">Rotation Angle (°)</label>
         <input type="number" step="any" className="input" value={Math.round(local.rotation || 0)} onChange={(e) => { setLocal(prev => ({ ...prev, rotation: e.target.value })); onChange('rotation', parseFloat(e.target.value) || 0); }} onBlur={onCommit} />
@@ -1215,6 +1324,260 @@ const KonvaCanvas = ({ shapesToLoad, onShapesChange, onShapeCountChange, canvasR
                     onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
                     onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
                   />
+                </Group>
+              );
+
+            // ════════════════════════════════════════════════════
+            //  CUSTOM REAL-WORLD ELEMENTS — 2D Top-Down Views
+            // ════════════════════════════════════════════════════
+
+            } else if (shape.type === 'tank') {
+              // Tank — top-down view: circle with cross-hatch
+              const r = shape.radius || 40;
+              return (
+                <Group key={shape.id}>
+                  <Circle
+                    id={shape.id}
+                    x={shape.x} y={shape.y} radius={r}
+                    fill="rgba(100, 116, 139, 0.25)" stroke={isSelected ? '#10b981' : '#64748b'} strokeWidth={isSelected ? 3 : 2}
+                    draggable={activeTool === 'select'}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                  />
+                  {/* Cross-hatch lines to indicate tank */}
+                  <Line points={[shape.x - r * 0.6, shape.y, shape.x + r * 0.6, shape.y]} stroke="#94a3b8" strokeWidth={1} listening={false} />
+                  <Line points={[shape.x, shape.y - r * 0.6, shape.x, shape.y + r * 0.6]} stroke="#94a3b8" strokeWidth={1} listening={false} />
+                  {/* Inner circle (dome outline) */}
+                  <Circle x={shape.x} y={shape.y} radius={r * 0.35} stroke="#94a3b8" strokeWidth={1} listening={false} />
+                  {shape.name && (
+                    <Text x={shape.x - r} y={shape.y - 8} width={r * 2} height={20}
+                      text={shape.name} fill="#fff" fontSize={12} fontStyle="bold"
+                      align="center" verticalAlign="middle" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={shape.x} y={shape.y - r - 20} text={`Tank Dia: ${formatUnit(r * 2)}`} />
+                </Group>
+              );
+
+            } else if (shape.type === 'house') {
+              // House — top-down view: rectangle with roof ridge line
+              const len = shape.houseLength || shape.width || 120;
+              const wid = shape.houseWidth || shape.depth || 100;
+              return (
+                <Group key={shape.id}>
+                  <Rect
+                    id={shape.id}
+                    x={shape.x} y={shape.y} width={len} height={wid}
+                    fill="rgba(226, 232, 240, 0.2)" stroke={isSelected ? '#10b981' : '#e2e8f0'} strokeWidth={isSelected ? 3 : 2}
+                    draggable={activeTool === 'select'}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                  />
+                  {/* Roof ridge line (center horizontal) */}
+                  <Line points={[shape.x, shape.y + wid / 2, shape.x + len, shape.y + wid / 2]}
+                    stroke="#dc2626" strokeWidth={2} dash={[6, 3]} listening={false} />
+                  {/* Diagonal roof lines from corners to ridge */}
+                  <Line points={[shape.x, shape.y, shape.x + len / 2, shape.y + wid / 2]}
+                    stroke="#dc2626" strokeWidth={1} listening={false} />
+                  <Line points={[shape.x + len, shape.y, shape.x + len / 2, shape.y + wid / 2]}
+                    stroke="#dc2626" strokeWidth={1} listening={false} />
+                  <Line points={[shape.x, shape.y + wid, shape.x + len / 2, shape.y + wid / 2]}
+                    stroke="#dc2626" strokeWidth={1} listening={false} />
+                  <Line points={[shape.x + len, shape.y + wid, shape.x + len / 2, shape.y + wid / 2]}
+                    stroke="#dc2626" strokeWidth={1} listening={false} />
+                  {/* Door indicator */}
+                  <Rect x={shape.x + len * 0.4} y={shape.y + wid - 4} width={len * 0.2} height={4}
+                    fill="#78350f" listening={false} />
+                  {shape.name && (
+                    <Text x={shape.x} y={shape.y + wid / 2 - 8} width={len} height={20}
+                      text={shape.name} fill="#fff" fontSize={13} fontStyle="bold"
+                      align="center" verticalAlign="middle" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={shape.x + len / 2} y={shape.y - 20} text={`${formatUnit(len)} × ${formatUnit(wid)}`} />
+                </Group>
+              );
+
+            } else if (shape.type === 'tree') {
+              // Tree — top-down view: filled circle (canopy) with small center dot (trunk)
+              const canopyR = shape.canopyRadius || 30;
+              const trunkR = shape.trunkRadius || 5;
+              return (
+                <Group key={shape.id}>
+                  <Circle
+                    id={shape.id}
+                    x={shape.x} y={shape.y} radius={canopyR}
+                    fill="rgba(22, 163, 74, 0.3)" stroke={isSelected ? '#10b981' : '#16a34a'} strokeWidth={isSelected ? 3 : 2}
+                    draggable={activeTool === 'select'}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                  />
+                  {/* Inner canopy rings */}
+                  <Circle x={shape.x} y={shape.y} radius={canopyR * 0.65} stroke="#22c55e" strokeWidth={1} listening={false} />
+                  {/* Trunk center dot */}
+                  <Circle x={shape.x} y={shape.y} radius={trunkR} fill="#92400e" stroke="#78350f" strokeWidth={1} listening={false} />
+                  {shape.name && (
+                    <Text x={shape.x - canopyR} y={shape.y - 8} width={canopyR * 2} height={20}
+                      text={shape.name} fill="#fff" fontSize={12} fontStyle="bold"
+                      align="center" verticalAlign="middle" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={shape.x} y={shape.y - canopyR - 20} text={`Tree R: ${formatUnit(canopyR)}`} />
+                </Group>
+              );
+
+            } else if (shape.type === 'wall') {
+              // Wall — top-down view: narrow filled rectangle with brick pattern
+              const w = shape.width || 200;
+              const t = shape.thickness || 10;
+              return (
+                <Group key={shape.id}>
+                  <Rect
+                    id={shape.id}
+                    x={shape.x} y={shape.y} width={w} height={t}
+                    fill="rgba(120, 113, 108, 0.5)" stroke={isSelected ? '#10b981' : '#a8a29e'} strokeWidth={isSelected ? 3 : 2}
+                    draggable={activeTool === 'select'} rotation={shape.rotation || 0}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                  />
+                  {/* Brick pattern lines */}
+                  <Line points={[shape.x, shape.y + t / 2, shape.x + w, shape.y + t / 2]}
+                    stroke="#78716c" strokeWidth={0.5} listening={false} />
+                  {shape.name && (
+                    <Text x={shape.x} y={shape.y + t + 6} width={w} height={18}
+                      text={shape.name} fill="#d6d3d1" fontSize={11} fontStyle="bold"
+                      align="center" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={shape.x + w / 2} y={shape.y - 20} text={`Wall: ${formatUnit(w)} × ${formatUnit(t)}`} />
+                </Group>
+              );
+
+            } else if (shape.type === 'pipe') {
+              // Pipe — top-down view: thick colored line with circle joints
+              const pipeR = shape.pipeRadius || 5;
+              if (!shape.points || shape.points.length < 4) return null;
+              const pts = shape.points;
+              const dx = pts[2] - pts[0];
+              const dy = pts[3] - pts[1];
+              const length = Math.round(Math.sqrt(dx * dx + dy * dy));
+              return (
+                <Group key={shape.id}>
+                  <Line
+                    id={shape.id}
+                    points={pts}
+                    stroke={isSelected ? '#22d3ee' : '#06b6d4'} strokeWidth={pipeR * 2}
+                    lineCap="round" lineJoin="round"
+                    draggable={activeTool === 'select'}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                    hitStrokeWidth={20}
+                  />
+                  {/* Center flow line */}
+                  <Line points={pts} stroke="#0e7490" strokeWidth={1} dash={[4, 4]} listening={false} />
+                  {/* Joint circles at endpoints */}
+                  <Circle x={pts[0]} y={pts[1]} radius={pipeR * 1.5} stroke="#0891b2" strokeWidth={2} fill="rgba(6, 182, 212, 0.2)" listening={false} />
+                  <Circle x={pts[2]} y={pts[3]} radius={pipeR * 1.5} stroke="#0891b2" strokeWidth={2} fill="rgba(6, 182, 212, 0.2)" listening={false} />
+                  {shape.name && (
+                    <Text x={(pts[0] + pts[2]) / 2 - 40} y={(pts[1] + pts[3]) / 2 - 20} width={80} height={18}
+                      text={shape.name} fill="#67e8f9" fontSize={11} fontStyle="bold"
+                      align="center" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={(pts[0] + pts[2]) / 2} y={Math.min(pts[1], pts[3]) - 24} text={`Pipe: ${formatUnit(length)}`} />
+                </Group>
+              );
+
+            } else if (shape.type === 'cable') {
+              // Cable — top-down view: thin dashed line with post dots
+              if (!shape.points || shape.points.length < 4) return null;
+              const pts = shape.points;
+              const dx = pts[2] - pts[0];
+              const dy = pts[3] - pts[1];
+              const length = Math.round(Math.sqrt(dx * dx + dy * dy));
+              return (
+                <Group key={shape.id}>
+                  <Line
+                    id={shape.id}
+                    points={pts}
+                    stroke={isSelected ? '#fbbf24' : '#f59e0b'} strokeWidth={isSelected ? 3 : 2}
+                    dash={[8, 4]}
+                    draggable={activeTool === 'select'}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                    hitStrokeWidth={20}
+                  />
+                  {/* Post markers at endpoints */}
+                  <Circle x={pts[0]} y={pts[1]} radius={4} fill="#78716c" stroke="#a8a29e" strokeWidth={1} listening={false} />
+                  <Circle x={pts[2]} y={pts[3]} radius={4} fill="#78716c" stroke="#a8a29e" strokeWidth={1} listening={false} />
+                  {/* Lightning bolt icon at center */}
+                  <Text x={(pts[0] + pts[2]) / 2 - 8} y={(pts[1] + pts[3]) / 2 - 8} text="⚡" fontSize={14} listening={false} />
+                  {shape.name && (
+                    <Text x={(pts[0] + pts[2]) / 2 - 40} y={(pts[1] + pts[3]) / 2 + 10} width={80} height={18}
+                      text={shape.name} fill="#fcd34d" fontSize={11} fontStyle="bold"
+                      align="center" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={(pts[0] + pts[2]) / 2} y={Math.min(pts[1], pts[3]) - 24} text={`Cable: ${formatUnit(length)}`} />
+                </Group>
+              );
+
+            } else if (shape.type === 'path') {
+              // Path — top-down view: wide green strip with dashed center line
+              const w = shape.width || 200;
+              const pw = shape.pathWidth || 30;
+              return (
+                <Group key={shape.id}>
+                  <Rect
+                    id={shape.id}
+                    x={shape.x} y={shape.y} width={w} height={pw}
+                    fill="rgba(52, 211, 153, 0.2)" stroke={isSelected ? '#10b981' : '#34d399'} strokeWidth={isSelected ? 3 : 1.5}
+                    draggable={activeTool === 'select'} rotation={shape.rotation || 0}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                  />
+                  {/* Dashed center line */}
+                  <Line points={[shape.x + 4, shape.y + pw / 2, shape.x + w - 4, shape.y + pw / 2]}
+                    stroke="#f0fdf4" strokeWidth={1} dash={[6, 4]} listening={false} />
+                  {shape.name && (
+                    <Text x={shape.x} y={shape.y + pw / 2 - 7} width={w} height={18}
+                      text={shape.name} fill="#d1fae5" fontSize={11} fontStyle="bold"
+                      align="center" verticalAlign="middle" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={shape.x + w / 2} y={shape.y - 20} text={`Path: ${formatUnit(w)} × ${formatUnit(pw)}`} />
+                </Group>
+              );
+
+            } else if (shape.type === 'road') {
+              // Road — top-down view: dark wide strip with yellow center dashes and white edge lines
+              const w = shape.width || 300;
+              const rw = shape.roadWidth || 60;
+              return (
+                <Group key={shape.id}>
+                  <Rect
+                    id={shape.id}
+                    x={shape.x} y={shape.y} width={w} height={rw}
+                    fill="rgba(55, 65, 81, 0.7)" stroke={isSelected ? '#10b981' : '#6b7280'} strokeWidth={isSelected ? 3 : 1.5}
+                    draggable={activeTool === 'select'} rotation={shape.rotation || 0}
+                    onClick={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onTap={() => { if (activeTool === 'select') selectShape(shape.id); }}
+                    onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd}
+                  />
+                  {/* Yellow center dashed line */}
+                  <Line points={[shape.x + 6, shape.y + rw / 2, shape.x + w - 6, shape.y + rw / 2]}
+                    stroke="#fbbf24" strokeWidth={2} dash={[10, 6]} listening={false} />
+                  {/* White edge lines */}
+                  <Line points={[shape.x + 4, shape.y + 4, shape.x + w - 4, shape.y + 4]}
+                    stroke="#e5e7eb" strokeWidth={1.5} listening={false} />
+                  <Line points={[shape.x + 4, shape.y + rw - 4, shape.x + w - 4, shape.y + rw - 4]}
+                    stroke="#e5e7eb" strokeWidth={1.5} listening={false} />
+                  {shape.name && (
+                    <Text x={shape.x} y={shape.y + rw / 2 - 7} width={w} height={18}
+                      text={shape.name} fill="#fff" fontSize={12} fontStyle="bold"
+                      align="center" verticalAlign="middle" listening={false} shadowColor="black" shadowBlur={2} />
+                  )}
+                  <DimensionLabel x={shape.x + w / 2} y={shape.y - 20} text={`Road: ${formatUnit(w)} × ${formatUnit(rw)}`} />
                 </Group>
               );
             }
