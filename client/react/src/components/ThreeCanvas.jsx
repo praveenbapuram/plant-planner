@@ -507,31 +507,259 @@ function Tree3D({ shape, isSelected, onSelect, isDraggable }) {
 function Wall3D({ shape, isSelected, onSelect, isDraggable }) {
   const w = (shape.width || 200) * SCALE;
   const t = (shape.thickness || 10) * SCALE;
-  const h = shape.extrudeHeight || 1.0;
+  const hL = shape.wallHeightLeft != null ? shape.wallHeightLeft : (shape.extrudeHeight || 1.0);
+  const hR = shape.wallHeightRight != null ? shape.wallHeightRight : (shape.extrudeHeight || 1.0);
   const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const fill = rgbaToHex(shape.fill) || '#78716c';
+  const opacity = shape.opacity ?? 0.9;
   const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
 
   const pos = useMemo(() => {
     const cx = (shape.x + (shape.width || 200) / 2) * SCALE;
     const cz = -(shape.y + (shape.thickness || 10) / 2) * SCALE;
-    return [cx, h / 2 + elev, cz];
-  }, [shape.x, shape.y, shape.width, shape.thickness, h, elev]);
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.width, shape.thickness, elev]);
+
+  const isSloped = Math.abs(hL - hR) > 0.001;
+  const maxH = Math.max(hL, hR);
+
+  // Build wall geometry — sloped or flat
+  const wallGeo = useMemo(() => {
+    const hw = w / 2, ht = t / 2;
+    if (!isSloped) {
+      return new THREE.BoxGeometry(w, hL, t);
+    }
+    // Custom geometry: 8 vertices for a sloped box
+    const g = new THREE.BufferGeometry();
+    const verts = new Float32Array([
+      // Front face (z = +ht): left side height hL, right side hR
+      -hw, 0, ht,   hw, 0, ht,   hw, hR, ht,   -hw, hL, ht,
+      // Back face (z = -ht)
+      hw, 0, -ht,   -hw, 0, -ht,  -hw, hL, -ht,  hw, hR, -ht,
+      // Top face (sloped)
+      -hw, hL, ht,  hw, hR, ht,   hw, hR, -ht,  -hw, hL, -ht,
+      // Bottom face
+      -hw, 0, -ht,  hw, 0, -ht,   hw, 0, ht,    -hw, 0, ht,
+      // Left face
+      -hw, 0, -ht,  -hw, 0, ht,   -hw, hL, ht,  -hw, hL, -ht,
+      // Right face
+      hw, 0, ht,    hw, 0, -ht,   hw, hR, -ht,  hw, hR, ht,
+    ]);
+    const indices = new Uint16Array([
+      0,1,2, 0,2,3,     4,5,6, 4,6,7,     8,9,10, 8,10,11,
+      12,13,14, 12,14,15, 16,17,18, 16,18,19, 20,21,22, 20,22,23,
+    ]);
+    g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    g.setIndex(new THREE.BufferAttribute(indices, 1));
+    g.computeVertexNormals();
+    return g;
+  }, [w, t, hL, hR, isSloped]);
+
+  // Windows on this wall
+  const windows = shape.windows || [];
 
   return (
-    <group>
-      <mesh position={pos} rotation={[0, -(shape.rotation || 0) * Math.PI / 180, 0]}
-        ref={meshRef} {...handlers} castShadow receiveShadow>
-        <boxGeometry args={[w, h, t]} />
-        <meshStandardMaterial color="#78716c" transparent opacity={hovered ? 0.95 : 0.9}
-          emissive={isSelected ? '#78716c' : '#000'} emissiveIntensity={isSelected ? 0.25 : 0}
-          roughness={0.85} metalness={0.05} />
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Main wall body */}
+      <mesh position={isSloped ? [0, 0, 0] : [0, hL / 2, 0]}
+        ref={meshRef} {...handlers} castShadow receiveShadow
+        geometry={wallGeo}>
+        <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.15, 1) : opacity}
+          emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.25 : 0}
+          roughness={0.85} metalness={0.05} side={THREE.DoubleSide} />
       </mesh>
-      {/* Brick line pattern */}
-      <lineSegments position={pos} rotation={[0, -(shape.rotation || 0) * Math.PI / 180, 0]}>
-        <edgesGeometry args={[new THREE.BoxGeometry(w, h, t)]} />
+      {/* Edge wireframe */}
+      <lineSegments position={isSloped ? [0, 0, 0] : [0, hL / 2, 0]}>
+        <edgesGeometry args={[wallGeo]} />
         <lineBasicMaterial color={isSelected ? '#fff' : '#a8a29e'} />
       </lineSegments>
-      <ShapeLabel name={shape.name || 'Wall'} position={[pos[0], h + 0.15, pos[2]]} />
+
+      {/* Windows */}
+      {windows.map((win, i) => {
+        const ww = (win.width || 40) * SCALE;
+        const wh = (win.height || 30) * SCALE;
+        // winX: position along wall length (0 = center), winY: height on wall
+        const wx = (win.offsetX || 0) * SCALE;
+        const wy = (win.offsetY || 40) * SCALE;
+        const frameD = t * 0.3; // frame depth slightly less than wall
+        return (
+          <group key={`win-${i}`} position={[wx, wy + wh / 2, 0]}>
+            {/* Glass pane */}
+            <mesh>
+              <boxGeometry args={[ww, wh, t * 1.05]} />
+              <meshStandardMaterial color="#87ceeb" transparent opacity={0.35}
+                roughness={0.05} metalness={0.3} side={THREE.DoubleSide} />
+            </mesh>
+            {/* Frame — 4 bars */}
+            {[
+              { p: [0, wh / 2, 0], s: [ww + 0.01, 0.015, frameD] },       // top
+              { p: [0, -wh / 2, 0], s: [ww + 0.01, 0.015, frameD] },      // bottom
+              { p: [-ww / 2, 0, 0], s: [0.015, wh + 0.01, frameD] },      // left
+              { p: [ww / 2, 0, 0], s: [0.015, wh + 0.01, frameD] },       // right
+            ].map(({ p, s }, fi) => (
+              <mesh key={fi} position={p}>
+                <boxGeometry args={s} />
+                <meshStandardMaterial color="#4a4a4a" roughness={0.3} metalness={0.5} />
+              </mesh>
+            ))}
+            {/* Center cross bar */}
+            <mesh>
+              <boxGeometry args={[0.008, wh, frameD * 0.5]} />
+              <meshStandardMaterial color="#4a4a4a" roughness={0.3} metalness={0.5} />
+            </mesh>
+            <mesh>
+              <boxGeometry args={[ww, 0.008, frameD * 0.5]} />
+              <meshStandardMaterial color="#4a4a4a" roughness={0.3} metalness={0.5} />
+            </mesh>
+          </group>
+        );
+      })}
+
+      <ShapeLabel name={shape.name || 'Wall'} position={[0, maxH + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Window (standalone, for placement on walls) ──────────────
+function Window3D({ shape, isSelected, onSelect, isDraggable }) {
+  const ww = (shape.windowWidth || 60) * SCALE;
+  const wh = (shape.windowHeight || 50) * SCALE;
+  const depth = 3 * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const fill = rgbaToHex(shape.fill) || '#87ceeb';
+  const opacity = shape.opacity ?? 0.4;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.windowWidth || 60) / 2) * SCALE;
+    const cz = -(shape.y + 2) * SCALE;
+    return [cx, wh / 2 + elev, cz];
+  }, [shape.x, shape.y, shape.windowWidth, wh, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Glass pane */}
+      <mesh ref={meshRef} {...handlers}>
+        <boxGeometry args={[ww, wh, depth]} />
+        <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.2, 1) : opacity}
+          roughness={0.05} metalness={0.3} side={THREE.DoubleSide}
+          emissive={isSelected ? '#87ceeb' : '#000'} emissiveIntensity={isSelected ? 0.3 : 0} />
+      </mesh>
+      {/* Frame */}
+      {[
+        { p: [0, wh / 2, 0], s: [ww + 0.01, 0.02, depth * 1.2] },
+        { p: [0, -wh / 2, 0], s: [ww + 0.01, 0.02, depth * 1.2] },
+        { p: [-ww / 2, 0, 0], s: [0.02, wh + 0.01, depth * 1.2] },
+        { p: [ww / 2, 0, 0], s: [0.02, wh + 0.01, depth * 1.2] },
+      ].map(({ p, s }, fi) => (
+        <mesh key={fi} position={p} castShadow>
+          <boxGeometry args={s} />
+          <meshStandardMaterial color="#333" roughness={0.3} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Cross bars */}
+      <mesh>
+        <boxGeometry args={[0.01, wh, depth * 0.6]} />
+        <meshStandardMaterial color="#333" roughness={0.3} metalness={0.6} />
+      </mesh>
+      <mesh>
+        <boxGeometry args={[ww, 0.01, depth * 0.6]} />
+        <meshStandardMaterial color="#333" roughness={0.3} metalness={0.6} />
+      </mesh>
+      <ShapeLabel name={shape.name} position={[0, wh / 2 + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Metal Sheet / Roofing ────────────────────────────────────
+function MetalSheet3D({ shape, isSelected, onSelect, isDraggable }) {
+  const sw = (shape.sheetWidth || 200) * SCALE;
+  const sd = (shape.sheetDepth || 150) * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const tilt = (shape.sheetTilt || 0) * Math.PI / 180;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const fill = rgbaToHex(shape.fill) || '#78909c';
+  const opacity = shape.opacity ?? 0.85;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.sheetWidth || 200) / 2) * SCALE;
+    const cz = -(shape.y + (shape.sheetDepth || 150) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.sheetWidth, shape.sheetDepth, elev]);
+
+  // Corrugation ridges count
+  const ridges = Math.max(3, Math.floor(sd / (8 * SCALE)));
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      <group rotation={[-tilt, 0, 0]}>
+        {/* Main sheet */}
+        <mesh ref={meshRef} {...handlers} castShadow receiveShadow>
+          <boxGeometry args={[sw, 0.008, sd]} />
+          <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.1, 1) : opacity}
+            roughness={0.25} metalness={0.75} side={THREE.DoubleSide}
+            emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.25 : 0} />
+        </mesh>
+        {/* Corrugation ridges */}
+        {Array.from({ length: ridges }, (_, i) => {
+          const rz = -sd / 2 + (i + 0.5) * (sd / ridges);
+          return (
+            <mesh key={`ridge${i}`} position={[0, 0.008, rz]}>
+              <boxGeometry args={[sw * 0.98, 0.006, 0.005]} />
+              <meshStandardMaterial color={fill} roughness={0.2} metalness={0.8} />
+            </mesh>
+          );
+        })}
+      </group>
+      <ShapeLabel name={shape.name || 'Metal Sheet'} position={[0, 0.3, 0]} />
+    </group>
+  );
+}
+
+// ─── Concrete Slab ────────────────────────────────────────────
+function ConcreteSlab3D({ shape, isSelected, onSelect, isDraggable }) {
+  const sw = (shape.slabWidth || 200) * SCALE;
+  const sd = (shape.slabDepth || 150) * SCALE;
+  const sh = shape.slabThickness || 0.08;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const fill = rgbaToHex(shape.fill) || '#9e9e9e';
+  const opacity = shape.opacity ?? 0.9;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.slabWidth || 200) / 2) * SCALE;
+    const cz = -(shape.y + (shape.slabDepth || 150) / 2) * SCALE;
+    return [cx, sh / 2 + elev, cz];
+  }, [shape.x, shape.y, shape.slabWidth, shape.slabDepth, sh, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Slab body */}
+      <mesh ref={meshRef} {...handlers} castShadow receiveShadow>
+        <boxGeometry args={[sw, sh, sd]} />
+        <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.1, 1) : opacity}
+          roughness={0.9} metalness={0.02}
+          emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.2 : 0} />
+      </mesh>
+      {/* Surface texture — expansion joints */}
+      {[-sw / 3, 0, sw / 3].map((jx, i) => (
+        <mesh key={`ej${i}`} position={[jx, sh / 2 + 0.001, 0]}>
+          <boxGeometry args={[0.005, 0.003, sd * 0.95]} />
+          <meshStandardMaterial color="#757575" roughness={1} />
+        </mesh>
+      ))}
+      {[-sd / 3, 0, sd / 3].map((jz, i) => (
+        <mesh key={`ejh${i}`} position={[0, sh / 2 + 0.001, jz]}>
+          <boxGeometry args={[sw * 0.95, 0.003, 0.005]} />
+          <meshStandardMaterial color="#757575" roughness={1} />
+        </mesh>
+      ))}
+      <lineSegments>
+        <edgesGeometry args={[new THREE.BoxGeometry(sw, sh, sd)]} />
+        <lineBasicMaterial color={isSelected ? '#fff' : '#888'} />
+      </lineSegments>
+      <ShapeLabel name={shape.name || 'Slab'} position={[0, sh / 2 + 0.2, 0]} />
     </group>
   );
 }
@@ -1454,10 +1682,13 @@ function Shape3D({ shape, isSelected, onSelect, isDraggable }) {
     case 'house':      return <House3D {...props} />;
     case 'tree':       return <Tree3D {...props} />;
     case 'wall':       return <Wall3D {...props} />;
+    case 'window':     return <Window3D {...props} />;
     case 'pipe':       return <Pipe3D {...props} />;
     case 'cable':      return <Cable3D {...props} />;
     case 'path':       return <Path3D {...props} />;
     case 'road':       return <Road3D {...props} />;
+    case 'metalSheet': return <MetalSheet3D {...props} />;
+    case 'concreteSlab': return <ConcreteSlab3D {...props} />;
     // Structural & layout elements
     case 'metalFrame': return <MetalFrame3D {...props} />;
     case 'fence':      return <Fence3D {...props} />;
@@ -1487,30 +1718,45 @@ function Shape3D({ shape, isSelected, onSelect, isDraggable }) {
 // ═════════════════════════════════════════════════════════════════
 //  ELEMENT CATALOG
 // ═════════════════════════════════════════════════════════════════
+// Group metadata for the toolbar
+const CATALOG_GROUPS = {
+  shape:     { label: 'Shapes',     icon: '🔷', color: '#60a5fa' },
+  building:  { label: 'Building',   icon: '🏠', color: '#f59e0b' },
+  infra:     { label: 'Infra',      icon: '🔧', color: '#06b6d4' },
+  material:  { label: 'Materials',  icon: '🔩', color: '#a78bfa' },
+  structure: { label: 'Structure',  icon: '🏗️', color: '#f472b6' },
+  outdoor:   { label: 'Outdoor',    icon: '🌿', color: '#34d399' },
+};
+
 const ELEMENT_CATALOG = [
-  // Primitives
+  // ── Shapes ──
   { type: 'rectangle', icon: '⬛', label: 'Box',      group: 'shape', dims: { width: 100, height: 80, extrudeHeight: 0.5 } },
   { type: 'circle',    icon: '⚫', label: 'Cylinder', group: 'shape', dims: { radius: 40, extrudeHeight: 0.5 } },
   { type: 'triangle',  icon: '🔺', label: 'Prism',   group: 'shape', dims: { radius: 40, extrudeHeight: 0.5 } },
-  // Real-world elements
-  { type: 'tank',      icon: '🛢️', label: 'Tank',    group: 'real',  dims: { radius: 40, extrudeHeight: 1.0 } },
-  { type: 'house',     icon: '🏠', label: 'House',   group: 'real',  dims: { houseLength: 120, houseWidth: 100, houseHeight: 80, roofHeight: 40 } },
-  { type: 'tree',      icon: '🌲', label: 'Tree',    group: 'real',  dims: { trunkRadius: 5, trunkHeight: 0.4, canopyRadius: 30, extrudeHeight: 0.8 } },
-  { type: 'wall',      icon: '🧱', label: 'Wall',    group: 'real',  dims: { width: 200, thickness: 10, extrudeHeight: 1.0 } },
-  { type: 'pipe',      icon: '💧', label: 'Pipe',    group: 'real',  dims: { length: 200, pipeRadius: 5 } },
-  { type: 'cable',     icon: '⚡', label: 'Cable',   group: 'real',  dims: { length: 200, cableRadius: 2, postHeight: 0.5 } },
-  { type: 'path',      icon: '👣', label: 'Path',    group: 'real',  dims: { width: 200, pathWidth: 30 } },
-  { type: 'road',      icon: '🛣️', label: 'Road',    group: 'real',  dims: { width: 300, roadWidth: 60, roadSurface: 'tar' } },
-  // Structural & layout elements
+  // ── Building ──
+  { type: 'house',     icon: '🏠', label: 'House',   group: 'building', dims: { houseLength: 120, houseWidth: 100, houseHeight: 80, roofHeight: 40 } },
+  { type: 'wall',      icon: '🧱', label: 'Wall',    group: 'building', dims: { width: 200, thickness: 10, extrudeHeight: 1.0, wallHeightLeft: 1.0, wallHeightRight: 1.0 } },
+  { type: 'window',    icon: '🪟', label: 'Window',  group: 'building', dims: { windowWidth: 60, windowHeight: 50 } },
+  { type: 'shed',      icon: '🏡', label: 'Shed',    group: 'building', dims: { shedWidth: 100, shedDepth: 80, shedHeight: 0.6, shedRoofHeight: 0.25 } },
+  // ── Infrastructure ──
+  { type: 'tank',      icon: '🛢️', label: 'Tank',    group: 'infra',  dims: { radius: 40, extrudeHeight: 1.0 } },
+  { type: 'pipe',      icon: '💧', label: 'Pipe',    group: 'infra',  dims: { length: 200, pipeRadius: 5 } },
+  { type: 'cable',     icon: '⚡', label: 'Cable',   group: 'infra',  dims: { length: 200, cableRadius: 2, postHeight: 0.5 } },
+  { type: 'path',      icon: '👣', label: 'Path',    group: 'infra',  dims: { width: 200, pathWidth: 30 } },
+  { type: 'road',      icon: '🛣️', label: 'Road',    group: 'infra',  dims: { width: 300, roadWidth: 60, roadSurface: 'tar' } },
+  // ── Materials ──
+  { type: 'metalSheet',   icon: '🔩', label: 'Metal Sheet',   group: 'material', dims: { sheetWidth: 200, sheetDepth: 150, sheetTilt: 0 } },
+  { type: 'concreteSlab', icon: '🪨', label: 'Concrete Slab', group: 'material', dims: { slabWidth: 200, slabDepth: 150, slabThickness: 0.08 } },
+  // ── Structure ──
   { type: 'metalFrame', icon: '🏗️', label: 'Metal Frame', group: 'structure', dims: { frameWidth: 150, frameDepth: 100, frameHeight: 1.5, barThickness: 3 } },
   { type: 'fence',      icon: '🏚️', label: 'Fence',       group: 'structure', dims: { width: 200, fenceHeight: 0.6 } },
   { type: 'gate',       icon: '🚪', label: 'Gate',        group: 'structure', dims: { gateWidth: 80, gateHeight: 0.8 } },
   { type: 'platform',   icon: '📋', label: 'Platform',    group: 'structure', dims: { width: 150, platformDepth: 120, platformHeight: 0.3 } },
   { type: 'stairs',     icon: '🪜', label: 'Stairs',      group: 'structure', dims: { stairWidth: 60, stairDepth: 100, stairHeight: 0.8, stairSteps: 5 } },
   { type: 'container',  icon: '📦', label: 'Container',   group: 'structure', dims: { containerWidth: 150, containerDepth: 60, containerHeight: 0.8 } },
-  // Outdoor & site elements
+  // ── Outdoor ──
+  { type: 'tree',       icon: '🌲', label: 'Tree',        group: 'outdoor', dims: { trunkRadius: 5, trunkHeight: 0.4, canopyRadius: 30, extrudeHeight: 0.8 } },
   { type: 'solarPanel', icon: '☀️', label: 'Solar Panel', group: 'outdoor', dims: { panelWidth: 120, panelDepth: 80, panelTilt: 30, postHeight: 0.4 } },
-  { type: 'shed',       icon: '🏡', label: 'Shed',        group: 'outdoor', dims: { shedWidth: 100, shedDepth: 80, shedHeight: 0.6, shedRoofHeight: 0.25 } },
   { type: 'gardenBed',  icon: '🌱', label: 'Garden Bed',  group: 'outdoor', dims: { bedWidth: 120, bedDepth: 60, bedHeight: 0.15 } },
   { type: 'pond',       icon: '💦', label: 'Pond',        group: 'outdoor', dims: { pondRadius: 50, pondDepth: 0.1 } },
   { type: 'lampPost',   icon: '💡', label: 'Lamp Post',   group: 'outdoor', dims: { poleHeight: 1.2 } },
@@ -1532,6 +1778,10 @@ const DIM_LABELS = {
   trunkRadius: 'Trunk R (px)', trunkHeight: 'Trunk Height (px)',
   canopyRadius: 'Canopy R (px)', roofHeight: 'Roof Height (px)',
   houseLength: 'Length (px)', houseWidth: 'Width (px)', houseHeight: 'Wall Height (px)',
+  wallHeightLeft: 'Left Height', wallHeightRight: 'Right Height',
+  windowWidth: 'Width (px)', windowHeight: 'Height (px)',
+  sheetWidth: 'Sheet Width (px)', sheetDepth: 'Sheet Depth (px)', sheetTilt: 'Tilt Angle (°)',
+  slabWidth: 'Slab Width (px)', slabDepth: 'Slab Depth (px)', slabThickness: 'Thickness',
   // New element dimensions
   frameWidth: 'Frame Width (px)', frameDepth: 'Frame Depth (px)',
   frameHeight: 'Frame Height', barThickness: 'Bar Thickness (px)',
@@ -1738,6 +1988,51 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
         <>
           <PropInput label="Length" value={uVal(shape.width || 200)} unit={sym} step={uStep} onChange={(v) => onUpdateShape(shape.id, { width: pxFromInput(v) })} />
           <PropInput label="Thick" value={uVal(shape.thickness || 10)} unit={sym} step={uStep} onChange={(v) => onUpdateShape(shape.id, { thickness: pxFromInput(v) })} />
+          <div className="three-prop-divider" />
+          <div className="three-prop-row"><span className="three-prop-label" style={{ fontWeight: 600, color: '#f59e0b' }}>Sloped Wall</span></div>
+          <PropInput label="Left H" value={parseFloat((shape.wallHeightLeft != null ? shape.wallHeightLeft : (shape.extrudeHeight || 1.0)).toFixed(2))} unit="" step={0.05} min={0.05}
+            onChange={(v) => onUpdateShape(shape.id, { wallHeightLeft: v, extrudeHeight: Math.max(v, shape.wallHeightRight || v) })} />
+          <PropInput label="Right H" value={parseFloat((shape.wallHeightRight != null ? shape.wallHeightRight : (shape.extrudeHeight || 1.0)).toFixed(2))} unit="" step={0.05} min={0.05}
+            onChange={(v) => onUpdateShape(shape.id, { wallHeightRight: v, extrudeHeight: Math.max(shape.wallHeightLeft || v, v) })} />
+          <div className="three-prop-divider" />
+          <div className="three-prop-row"><span className="three-prop-label" style={{ fontWeight: 600, color: '#60a5fa' }}>🪟 Windows</span></div>
+          <button className="three-group-btn" style={{ width: '100%', marginBottom: 6 }}
+            onClick={() => {
+              const existing = shape.windows || [];
+              const newWin = { width: 40, height: 30, offsetX: 0, offsetY: 40 };
+              onUpdateShape(shape.id, { windows: [...existing, newWin] });
+            }}>
+            + Add Window
+          </button>
+          {(shape.windows || []).map((win, wi) => (
+            <div key={wi} className="three-window-entry">
+              <span className="three-window-badge">🪟 #{wi + 1}</span>
+              <div className="three-prop-row">
+                <span className="three-prop-label" style={{ fontSize: 10 }}>W</span>
+                <input type="number" className="three-prop-edit-input three-prop-inline" style={{ width: 50 }}
+                  value={win.width || 40} step={5} min={5}
+                  onChange={(e) => { const ws = [...(shape.windows || [])]; ws[wi] = { ...ws[wi], width: parseFloat(e.target.value) || 40 }; onUpdateShape(shape.id, { windows: ws }); }} />
+                <span className="three-prop-label" style={{ fontSize: 10 }}>H</span>
+                <input type="number" className="three-prop-edit-input three-prop-inline" style={{ width: 50 }}
+                  value={win.height || 30} step={5} min={5}
+                  onChange={(e) => { const ws = [...(shape.windows || [])]; ws[wi] = { ...ws[wi], height: parseFloat(e.target.value) || 30 }; onUpdateShape(shape.id, { windows: ws }); }} />
+              </div>
+              <div className="three-prop-row">
+                <span className="three-prop-label" style={{ fontSize: 10 }}>Pos X</span>
+                <input type="number" className="three-prop-edit-input three-prop-inline" style={{ width: 50 }}
+                  value={win.offsetX || 0} step={5}
+                  onChange={(e) => { const ws = [...(shape.windows || [])]; ws[wi] = { ...ws[wi], offsetX: parseFloat(e.target.value) || 0 }; onUpdateShape(shape.id, { windows: ws }); }} />
+                <span className="three-prop-label" style={{ fontSize: 10 }}>Pos Y</span>
+                <input type="number" className="three-prop-edit-input three-prop-inline" style={{ width: 50 }}
+                  value={win.offsetY || 40} step={5}
+                  onChange={(e) => { const ws = [...(shape.windows || [])]; ws[wi] = { ...ws[wi], offsetY: parseFloat(e.target.value) || 40 }; onUpdateShape(shape.id, { windows: ws }); }} />
+              </div>
+              <button className="three-delete-btn" style={{ fontSize: 10, padding: '2px 6px', marginTop: 2 }}
+                onClick={() => { const ws = [...(shape.windows || [])]; ws.splice(wi, 1); onUpdateShape(shape.id, { windows: ws }); }}>
+                🗑️ Remove
+              </button>
+            </div>
+          ))}
           {shape.anchorPoint && (
             <div className="three-wall-anchor-info">
               <span className="three-wall-anchor-badge">🔗 Anchored</span>
@@ -1907,13 +2202,117 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
   );
 }
 
+// ─── Grouped Element Toolbar ──────────────────────────────────────
+function GroupedElementToolbar({ addingElement, setAddingElement }) {
+  const [activeGroup, setActiveGroup] = useState(null);
+
+  // Build grouped catalog
+  const grouped = useMemo(() => {
+    const map = {};
+    ELEMENT_CATALOG.forEach(elem => {
+      if (!map[elem.group]) map[elem.group] = [];
+      map[elem.group].push(elem);
+    });
+    return map;
+  }, []);
+
+  const groupKeys = Object.keys(CATALOG_GROUPS);
+
+  const handleExportCatalog = () => {
+    const catalog = ELEMENT_CATALOG.map(elem => {
+      const dimEntries = Object.entries(elem.dims).map(([key, defaultValue]) => ({
+        key, label: DIM_LABELS[key] || key, defaultValue,
+        type: typeof defaultValue === 'string' ? 'string' : 'number',
+      }));
+      return {
+        type: elem.type, icon: elem.icon, label: elem.label, group: elem.group,
+        capabilities: {
+          draggable: true, rotatable: true, elevationZ: true, resizable: true,
+          colorCustomizable: true, opacityControl: true, groupLinkable: true,
+          snapToGrid: true, copyPaste: true, undoRedo: true,
+          pointBased: ['pipe', 'cable', 'line', 'path_line'].includes(elem.type),
+          roadSurfaces: elem.type === 'road', wallContinuation: elem.type === 'wall',
+        },
+        dimensions: dimEntries, defaultDimensions: { ...elem.dims },
+      };
+    });
+    const exportData = {
+      name: 'PlantPlanner Element Catalog', version: '1.0',
+      exportedAt: new Date().toISOString(), totalElements: catalog.length,
+      groups: [...new Set(ELEMENT_CATALOG.map(e => e.group))], elements: catalog,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `element-catalog-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="three-element-toolbar">
+      {/* Group tab buttons */}
+      <div className="three-group-tabs">
+        {groupKeys.map(gk => {
+          const gm = CATALOG_GROUPS[gk];
+          if (!grouped[gk]) return null;
+          const isActive = activeGroup === gk;
+          const count = grouped[gk].length;
+          return (
+            <button key={gk}
+              className={`three-group-tab ${isActive ? 'active' : ''}`}
+              style={{ '--group-color': gm.color }}
+              onClick={() => setActiveGroup(isActive ? null : gk)}
+              title={`${gm.label} (${count} items)`}>
+              <span className="three-group-tab-icon">{gm.icon}</span>
+              <span className="three-group-tab-label">{gm.label}</span>
+              <span className="three-group-tab-count">{count}</span>
+            </button>
+          );
+        })}
+        <button className="three-group-tab three-group-tab-export"
+          onClick={handleExportCatalog} title="Export full catalog as JSON">
+          <span className="three-group-tab-icon">📋</span>
+          <span className="three-group-tab-label">Export</span>
+        </button>
+      </div>
+
+      {/* Expanded element grid for active group */}
+      {activeGroup && grouped[activeGroup] && (
+        <div className="three-group-items" style={{ '--group-color': CATALOG_GROUPS[activeGroup]?.color || '#34d399' }}>
+          {grouped[activeGroup].map(elem => (
+            <button key={elem.type}
+              className={`three-elem-btn ${addingElement?.type === elem.type ? 'active' : ''}`}
+              onClick={() => setAddingElement(addingElement?.type === elem.type ? null : elem)}
+              title={`Add ${elem.label}`}>
+              <span className="three-elem-icon">{elem.icon}</span>
+              <span className="three-elem-label">{elem.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Dimension Input Modal ────────────────────────────────────────
 function DimensionModal({ elementDef, onConfirm, onCancel, unit, pxPerUnit }) {
   const sym = UNIT_DEFS[unit]?.symbol || 'px';
   const ppu = pxPerUnit || 1;
   // Store dims internally in the selected unit for display, convert back to px on confirm
-  const is3DKey = (k) => k === 'extrudeHeight' || k === 'trunkHeight' || k === 'postHeight';
-  const isUnitless = (k) => k.includes('angle') || k === 'sides' || k === 'lineType' || k === 'roadSurface';
+  // Keys stored as 3D world units (not px) — values like 0.3, 0.6, 1.0
+  // These need world-unit ↔ display conversion: worldUnit → px (÷ SCALE) → displayUnit (÷ ppu)
+  const WORLD_UNIT_KEYS = new Set([
+    'extrudeHeight', 'trunkHeight', 'postHeight', 'poleHeight',
+    'wallHeightLeft', 'wallHeightRight',
+    'fenceHeight', 'gateHeight', 'platformHeight',
+    'stairHeight', 'containerHeight',
+    'shedHeight', 'shedRoofHeight', 'bedHeight',
+    'signHeight', 'slabThickness', 'frameHeight', 'pondDepth',
+  ]);
+  const is3DKey = (k) => WORLD_UNIT_KEYS.has(k);
+  const isUnitless = (k) => k.includes('angle') || k.includes('Tilt') || k === 'sides' || k === 'lineType' || k === 'roadSurface' || k === 'stairSteps';
 
   const initDims = useMemo(() => {
     const d = {};
@@ -3266,6 +3665,28 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
           <span className="three-view-icon">📏</span>
           <span className="three-view-label">Measure</span>
         </button>
+        <div style={{ height: '1px', background: 'rgba(96,165,250,0.3)', margin: '4px 0' }} />
+        <button className="three-view-btn three-inside-view-btn"
+          onClick={() => {
+            setViewPreset('perspective');
+            if (controlsRef.current) {
+              const eyeH = 0.5; // eye-level height in world units
+              // If a shape is selected, go inside that shape's location
+              const sel = selectedId ? localShapes.find(s => s.id === selectedId) : null;
+              const tx = sel ? (sel.x || 0) * SCALE : bounds.cx;
+              const tz = sel ? -(sel.y || 0) * SCALE : bounds.cz;
+              // Position camera at eye level, slightly offset
+              controlsRef.current.object.position.set(tx, eyeH, tz + 0.3);
+              controlsRef.current.target.set(tx, eyeH, tz - 2);
+              controlsRef.current.maxPolarAngle = Math.PI; // allow looking up/down freely
+              controlsRef.current.minDistance = 0.1;
+              controlsRef.current.update();
+            }
+          }}
+          title="Inside view — place camera at eye level inside the layout (select a shape to start there)">
+          <span className="three-view-icon">👁️</span>
+          <span className="three-view-label">Inside</span>
+        </button>
       </div>
 
       {/* Elevation Slider — right side */}
@@ -3400,83 +3821,11 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
         </button>
       </div>
 
-      {/* Element Toolbar — split into groups */}
-      <div className="three-element-toolbar">
-        {ELEMENT_CATALOG.map((elem, i) => {
-          // Add divider between groups
-          const prevGroup = i > 0 ? ELEMENT_CATALOG[i - 1].group : null;
-          const showDivider = prevGroup && prevGroup !== elem.group;
-          return (
-            <React.Fragment key={elem.type}>
-              {showDivider && <div className="three-toolbar-divider" />}
-              <button
-                className={`three-elem-btn ${addingElement?.type === elem.type ? 'active' : ''}`}
-                onClick={() => setAddingElement(addingElement?.type === elem.type ? null : elem)}
-                title={`Add ${elem.label}`}
-              >
-                <span className="three-elem-icon">{elem.icon}</span>
-                <span className="three-elem-label">{elem.label}</span>
-              </button>
-            </React.Fragment>
-          );
-        })}
-        <div className="three-toolbar-divider" />
-        <button
-          className="three-elem-btn three-export-catalog-btn"
-          onClick={() => {
-            const catalog = ELEMENT_CATALOG.map(elem => {
-              const dimEntries = Object.entries(elem.dims).map(([key, defaultValue]) => ({
-                key,
-                label: DIM_LABELS[key] || key,
-                defaultValue,
-                type: typeof defaultValue === 'string' ? 'string' : 'number',
-              }));
-              return {
-                type: elem.type,
-                icon: elem.icon,
-                label: elem.label,
-                group: elem.group,
-                capabilities: {
-                  draggable: true,
-                  rotatable: true,
-                  elevationZ: true,
-                  resizable: true,
-                  colorCustomizable: true,
-                  opacityControl: true,
-                  groupLinkable: true,
-                  snapToGrid: true,
-                  copyPaste: true,
-                  undoRedo: true,
-                  pointBased: ['pipe', 'cable', 'line', 'path_line'].includes(elem.type),
-                  roadSurfaces: elem.type === 'road',
-                  wallContinuation: elem.type === 'wall',
-                },
-                dimensions: dimEntries,
-                defaultDimensions: { ...elem.dims },
-              };
-            });
-            const exportData = {
-              name: 'PlantPlanner Element Catalog',
-              version: '1.0',
-              exportedAt: new Date().toISOString(),
-              totalElements: catalog.length,
-              groups: [...new Set(ELEMENT_CATALOG.map(e => e.group))],
-              elements: catalog,
-            };
-            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `element-catalog-${new Date().toISOString().slice(0, 10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          title="Export full element catalog as JSON"
-        >
-          <span className="three-elem-icon">📋</span>
-          <span className="three-elem-label">Export Catalog</span>
-        </button>
-      </div>
+      {/* Element Toolbar — grouped with tabs */}
+      <GroupedElementToolbar
+        addingElement={addingElement}
+        setAddingElement={setAddingElement}
+      />
 
       {addingElement && (
         <DimensionModal
