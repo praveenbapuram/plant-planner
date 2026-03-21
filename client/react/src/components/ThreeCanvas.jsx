@@ -846,6 +846,592 @@ function Road3D({ shape, isSelected, onSelect, isDraggable }) {
   );
 }
 
+// ─── Metal Frame / Steel Structure ──────────────────────────────
+function MetalFrame3D({ shape, isSelected, onSelect, isDraggable }) {
+  const fw = (shape.frameWidth || 150) * SCALE;
+  const fd = (shape.frameDepth || 100) * SCALE;
+  const fh = shape.frameHeight || 1.5;
+  const bar = (shape.barThickness || 3) * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#7f8c8d';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.frameWidth || 150) / 2) * SCALE;
+    const cz = -(shape.y + (shape.frameDepth || 100) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.frameWidth, shape.frameDepth, elev]);
+
+  // Build frame as 4 vertical posts + 4 top beams + 4 bottom beams
+  const posts = useMemo(() => {
+    const hw = fw / 2, hd = fd / 2;
+    return [[-hw, hd], [hw, hd], [hw, -hd], [-hw, -hd]];
+  }, [fw, fd]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Invisible hitbox */}
+      <mesh ref={meshRef} {...handlers} position={[0, fh / 2, 0]} visible={false}>
+        <boxGeometry args={[fw, fh, fd]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+      {/* Vertical posts */}
+      {posts.map(([px, pz], i) => (
+        <mesh key={`p${i}`} position={[px, fh / 2, pz]} castShadow>
+          <boxGeometry args={[bar, fh, bar]} />
+          {mat(fill, 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.8 })}
+        </mesh>
+      ))}
+      {/* Top beams */}
+      {posts.map(([px, pz], i) => {
+        const next = posts[(i + 1) % 4];
+        const mx = (px + next[0]) / 2, mz = (pz + next[1]) / 2;
+        const len = Math.sqrt((next[0] - px) ** 2 + (next[1] - pz) ** 2);
+        const angle = Math.atan2(next[1] - pz, next[0] - px);
+        return (
+          <mesh key={`t${i}`} position={[mx, fh, mz]} rotation={[0, -angle, 0]} castShadow>
+            <boxGeometry args={[len, bar, bar]} />
+            {mat(fill, 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.8 })}
+          </mesh>
+        );
+      })}
+      {/* Bottom beams */}
+      {posts.map(([px, pz], i) => {
+        const next = posts[(i + 1) % 4];
+        const mx = (px + next[0]) / 2, mz = (pz + next[1]) / 2;
+        const len = Math.sqrt((next[0] - px) ** 2 + (next[1] - pz) ** 2);
+        const angle = Math.atan2(next[1] - pz, next[0] - px);
+        return (
+          <mesh key={`b${i}`} position={[mx, 0, mz]} rotation={[0, -angle, 0]} castShadow>
+            <boxGeometry args={[len, bar, bar]} />
+            {mat(fill, 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.8 })}
+          </mesh>
+        );
+      })}
+      <ShapeLabel name={shape.name} position={[0, fh + 0.2, 0]} />
+    </group>
+  );
+}
+
+// ─── Fence ─────────────────────────────────────────────────────
+function Fence3D({ shape, isSelected, onSelect, isDraggable }) {
+  const fenceLen = (shape.width || 200) * SCALE;
+  const fenceH = shape.fenceHeight || 0.6;
+  const postR = 2 * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#8b7355';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.width || 200) / 2) * SCALE;
+    const cz = -(shape.y + 5) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.width, elev]);
+
+  const postCount = Math.max(2, Math.ceil(fenceLen / (30 * SCALE)) + 1);
+  const spacing = fenceLen / (postCount - 1);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      <mesh ref={meshRef} {...handlers} position={[0, fenceH / 2, 0]} visible={false}>
+        <boxGeometry args={[fenceLen, fenceH, postR * 4]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+      {Array.from({ length: postCount }, (_, i) => {
+        const px = -fenceLen / 2 + i * spacing;
+        return (
+          <mesh key={`fp${i}`} position={[px, fenceH / 2, 0]} castShadow>
+            <cylinderGeometry args={[postR, postR, fenceH, 8]} />
+            {mat(fill, 0.9, isSelected, hovered, { roughness: 0.8 })}
+          </mesh>
+        );
+      })}
+      {/* Horizontal rails */}
+      {[0.2, 0.5].filter(h => h < fenceH).map((rh, ri) => (
+        <mesh key={`rail${ri}`} position={[0, rh, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[postR * 0.6, postR * 0.6, fenceLen, 8]} />
+          {mat(fill, 0.85, isSelected, hovered, { roughness: 0.8 })}
+        </mesh>
+      ))}
+      <ShapeLabel name={shape.name} position={[0, fenceH + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Gate ──────────────────────────────────────────────────────
+function Gate3D({ shape, isSelected, onSelect, isDraggable }) {
+  const gateW = (shape.gateWidth || 80) * SCALE;
+  const gateH = shape.gateHeight || 0.8;
+  const bar = 2 * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#4a4a4a';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.gateWidth || 80) / 2) * SCALE;
+    const cz = -(shape.y + 5) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.gateWidth, elev]);
+
+  const barCount = Math.max(3, Math.floor(gateW / (8 * SCALE)));
+  const barSpacing = gateW / (barCount + 1);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      <mesh ref={meshRef} {...handlers} position={[0, gateH / 2, 0]} visible={false}>
+        <boxGeometry args={[gateW + bar * 4, gateH, bar * 4]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+      {/* Gate posts (thicker) */}
+      {[-gateW / 2 - bar, gateW / 2 + bar].map((px, i) => (
+        <mesh key={`gp${i}`} position={[px, gateH / 2, 0]} castShadow>
+          <boxGeometry args={[bar * 2, gateH, bar * 2]} />
+          {mat('#333333', 0.95, isSelected, hovered, { roughness: 0.3, metalness: 0.7 })}
+        </mesh>
+      ))}
+      {/* Vertical bars */}
+      {Array.from({ length: barCount }, (_, i) => (
+        <mesh key={`gb${i}`} position={[-gateW / 2 + (i + 1) * barSpacing, gateH / 2, 0]} castShadow>
+          <cylinderGeometry args={[bar * 0.5, bar * 0.5, gateH * 0.9, 6]} />
+          {mat(fill, 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.6 })}
+        </mesh>
+      ))}
+      {/* Top rail */}
+      <mesh position={[0, gateH * 0.95, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+        <cylinderGeometry args={[bar * 0.7, bar * 0.7, gateW, 8]} />
+        {mat(fill, 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.6 })}
+      </mesh>
+      <ShapeLabel name={shape.name} position={[0, gateH + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Platform / Deck ──────────────────────────────────────────
+function Platform3D({ shape, isSelected, onSelect, isDraggable }) {
+  const pw = (shape.width || 150) * SCALE;
+  const pd = (shape.platformDepth || 120) * SCALE;
+  const ph = shape.platformHeight || 0.3;
+  const legBar = 3 * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#a0522d';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.width || 150) / 2) * SCALE;
+    const cz = -(shape.y + (shape.platformDepth || 120) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.width, shape.platformDepth, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Top surface */}
+      <mesh ref={meshRef} {...handlers} position={[0, ph, 0]} castShadow receiveShadow>
+        <boxGeometry args={[pw, 0.04, pd]} />
+        {mat(fill, 0.85, isSelected, hovered, { roughness: 0.85 })}
+      </mesh>
+      {/* Legs */}
+      {[[-1,-1],[-1,1],[1,-1],[1,1]].map(([sx, sz], i) => (
+        <mesh key={`leg${i}`} position={[sx * (pw / 2 - legBar), ph / 2, sz * (pd / 2 - legBar)]} castShadow>
+          <boxGeometry args={[legBar, ph, legBar]} />
+          {mat('#666', 0.9, isSelected, hovered, { roughness: 0.4, metalness: 0.5 })}
+        </mesh>
+      ))}
+      <ShapeLabel name={shape.name} position={[0, ph + 0.2, 0]} />
+    </group>
+  );
+}
+
+// ─── Stairs ────────────────────────────────────────────────────
+function Stairs3D({ shape, isSelected, onSelect, isDraggable }) {
+  const sw = (shape.stairWidth || 60) * SCALE;
+  const sd = (shape.stairDepth || 100) * SCALE;
+  const sh = shape.stairHeight || 0.8;
+  const steps = shape.stairSteps || 5;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#9ca3af';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.stairWidth || 60) / 2) * SCALE;
+    const cz = -(shape.y + (shape.stairDepth || 100) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.stairWidth, shape.stairDepth, elev]);
+
+  const stepH = sh / steps;
+  const stepD = sd / steps;
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      <mesh ref={meshRef} {...handlers} position={[0, sh / 2, 0]} visible={false}>
+        <boxGeometry args={[sw, sh, sd]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+      {Array.from({ length: steps }, (_, i) => (
+        <mesh key={`step${i}`}
+          position={[0, (i + 0.5) * stepH, -sd / 2 + (i + 0.5) * stepD]}
+          castShadow receiveShadow>
+          <boxGeometry args={[sw, stepH * 0.9, stepD * 0.95]} />
+          {mat(fill, 0.85, isSelected, hovered, { roughness: 0.8 })}
+        </mesh>
+      ))}
+      <ShapeLabel name={shape.name} position={[0, sh + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Solar Panel ──────────────────────────────────────────────
+function SolarPanel3D({ shape, isSelected, onSelect, isDraggable }) {
+  const pw = (shape.panelWidth || 120) * SCALE;
+  const pd = (shape.panelDepth || 80) * SCALE;
+  const tilt = (shape.panelTilt || 30) * Math.PI / 180;
+  const postH = shape.postHeight || 0.4;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.panelWidth || 120) / 2) * SCALE;
+    const cz = -(shape.y + (shape.panelDepth || 80) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.panelWidth, shape.panelDepth, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Support post */}
+      <mesh position={[0, postH / 2, 0]} castShadow>
+        <cylinderGeometry args={[2 * SCALE, 2 * SCALE, postH, 8]} />
+        {mat('#555', 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.7 })}
+      </mesh>
+      {/* Panel (tilted) */}
+      <group position={[0, postH, 0]} rotation={[-tilt, 0, 0]}>
+        <mesh ref={meshRef} {...handlers} castShadow receiveShadow>
+          <boxGeometry args={[pw, 0.02, pd]} />
+          {mat('#1a365d', 0.85, isSelected, hovered, { roughness: 0.2, metalness: 0.4 })}
+        </mesh>
+        {/* Grid lines on panel */}
+        {[-pw / 4, 0, pw / 4].map((lx, i) => (
+          <mesh key={`gl${i}`} position={[lx, 0.015, 0]}>
+            <boxGeometry args={[0.005, 0.005, pd * 0.95]} />
+            <meshBasicMaterial color="#2d4a7a" />
+          </mesh>
+        ))}
+        {[-pd / 3, 0, pd / 3].map((lz, i) => (
+          <mesh key={`gh${i}`} position={[0, 0.015, lz]}>
+            <boxGeometry args={[pw * 0.95, 0.005, 0.005]} />
+            <meshBasicMaterial color="#2d4a7a" />
+          </mesh>
+        ))}
+      </group>
+      <ShapeLabel name={shape.name} position={[0, postH + 0.4, 0]} />
+    </group>
+  );
+}
+
+// ─── Shed / Shelter ───────────────────────────────────────────
+function Shed3D({ shape, isSelected, onSelect, isDraggable }) {
+  const sw = (shape.shedWidth || 100) * SCALE;
+  const sd = (shape.shedDepth || 80) * SCALE;
+  const sh = shape.shedHeight || 0.6;
+  const rh = shape.shedRoofHeight || 0.25;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#8b6914';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.shedWidth || 100) / 2) * SCALE;
+    const cz = -(shape.y + (shape.shedDepth || 80) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.shedWidth, shape.shedDepth, elev]);
+
+  const roofGeo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const hw = sw / 2, hd = sd / 2;
+    const verts = new Float32Array([
+      -hw, sh, -hd,  hw, sh, -hd,  0, sh + rh, 0,
+      hw, sh, -hd,   hw, sh, hd,   0, sh + rh, 0,
+      hw, sh, hd,   -hw, sh, hd,   0, sh + rh, 0,
+      -hw, sh, hd,  -hw, sh, -hd,  0, sh + rh, 0,
+    ]);
+    g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    g.computeVertexNormals();
+    return g;
+  }, [sw, sd, sh, rh]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Walls */}
+      <mesh ref={meshRef} {...handlers} position={[0, sh / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[sw, sh, sd]} />
+        {mat(fill, 0.8, isSelected, hovered, { roughness: 0.85 })}
+      </mesh>
+      {/* Roof */}
+      <mesh geometry={roofGeo} castShadow>
+        {mat('#a0522d', 0.85, isSelected, hovered, { roughness: 0.7 })}
+      </mesh>
+      <ShapeLabel name={shape.name} position={[0, sh + rh + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Garden Bed ───────────────────────────────────────────────
+function GardenBed3D({ shape, isSelected, onSelect, isDraggable }) {
+  const bw = (shape.bedWidth || 120) * SCALE;
+  const bd = (shape.bedDepth || 60) * SCALE;
+  const bh = shape.bedHeight || 0.15;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#5d4037';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.bedWidth || 120) / 2) * SCALE;
+    const cz = -(shape.y + (shape.bedDepth || 60) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.bedWidth, shape.bedDepth, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Wooden border */}
+      <mesh ref={meshRef} {...handlers} position={[0, bh / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[bw, bh, bd]} />
+        {mat(fill, 0.85, isSelected, hovered, { roughness: 0.9 })}
+      </mesh>
+      {/* Soil fill */}
+      <mesh position={[0, bh * 0.9, 0]}>
+        <boxGeometry args={[bw * 0.9, 0.02, bd * 0.9]} />
+        {mat('#3e2723', 0.9, isSelected, hovered, { roughness: 1.0 })}
+      </mesh>
+      {/* Mini plant rows */}
+      {[-bd * 0.25, 0, bd * 0.25].map((rz, i) => (
+        <group key={`row${i}`}>
+          {Array.from({ length: 4 }, (_, j) => (
+            <mesh key={`p${j}`} position={[-bw * 0.3 + j * (bw * 0.2), bh + 0.04, rz]}>
+              <sphereGeometry args={[0.03, 8, 8]} />
+              <meshStandardMaterial color="#2e7d32" />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      <ShapeLabel name={shape.name} position={[0, bh + 0.2, 0]} />
+    </group>
+  );
+}
+
+// ─── Pond / Pool ──────────────────────────────────────────────
+function Pond3D({ shape, isSelected, onSelect, isDraggable }) {
+  const pr = (shape.pondRadius || 50) * SCALE;
+  const pd = shape.pondDepth || 0.1;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#1565c0';
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, -pd / 2, shape.z || 0), [shape.x, shape.y, pd, shape.z]);
+
+  return (
+    <group>
+      {/* Rim */}
+      <mesh position={[pos[0], elev + 0.01, pos[2]]}>
+        <cylinderGeometry args={[pr * 1.08, pr * 1.08, 0.03, 32]} />
+        {mat('#78909c', 0.8, isSelected, hovered, { roughness: 0.7 })}
+      </mesh>
+      {/* Water surface */}
+      <mesh ref={meshRef} {...handlers} position={[pos[0], elev, pos[2]]} receiveShadow>
+        <cylinderGeometry args={[pr, pr, 0.02, 32]} />
+        {mat(fill, 0.5, isSelected, hovered, { roughness: 0.1, metalness: 0.3 })}
+      </mesh>
+      <ShapeLabel name={shape.name} position={[pos[0], elev + 0.2, pos[2]]} />
+    </group>
+  );
+}
+
+// ─── Lamp Post / Light ────────────────────────────────────────
+function LampPost3D({ shape, isSelected, onSelect, isDraggable }) {
+  const poleH = shape.poleHeight || 1.2;
+  const poleR = 2 * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#37474f';
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, 0, shape.z || 0), [shape.x, shape.y, shape.z]);
+
+  return (
+    <group>
+      {/* Pole */}
+      <mesh ref={meshRef} {...handlers} position={[pos[0], poleH / 2 + elev, pos[2]]} castShadow>
+        <cylinderGeometry args={[poleR, poleR * 1.3, poleH, 8]} />
+        {mat(fill, 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.7 })}
+      </mesh>
+      {/* Lamp head */}
+      <mesh position={[pos[0], poleH + elev, pos[2]]} castShadow>
+        <sphereGeometry args={[poleR * 3, 16, 16]} />
+        {mat('#fdd835', 0.7, isSelected, hovered, { roughness: 0.2 })}
+      </mesh>
+      {/* Light glow */}
+      <pointLight position={[pos[0], poleH + elev, pos[2]]} intensity={0.5} distance={3} color="#fdd835" />
+      <ShapeLabel name={shape.name} position={[pos[0], poleH + 0.25 + elev, pos[2]]} />
+    </group>
+  );
+}
+
+// ─── Bench / Seating ──────────────────────────────────────────
+function Bench3D({ shape, isSelected, onSelect, isDraggable }) {
+  const bw = (shape.benchWidth || 80) * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#5d4037';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.benchWidth || 80) / 2) * SCALE;
+    const cz = -(shape.y + 15) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.benchWidth, elev]);
+
+  const seatH = 0.22, seatD = 15 * SCALE, legH = 0.22;
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      <mesh ref={meshRef} {...handlers} position={[0, seatH + legH, 0]} visible={false}>
+        <boxGeometry args={[bw, 0.5, seatD * 2]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+      {/* Seat */}
+      <mesh position={[0, legH + 0.02, 0]} castShadow>
+        <boxGeometry args={[bw, 0.03, seatD]} />
+        {mat(fill, 0.9, isSelected, hovered, { roughness: 0.85 })}
+      </mesh>
+      {/* Backrest */}
+      <mesh position={[0, legH + 0.12, -seatD / 2]} castShadow>
+        <boxGeometry args={[bw, 0.18, 0.02]} />
+        {mat(fill, 0.9, isSelected, hovered, { roughness: 0.85 })}
+      </mesh>
+      {/* Legs */}
+      {[-bw * 0.35, bw * 0.35].map((lx, i) => (
+        <mesh key={`bl${i}`} position={[lx, legH / 2, 0]} castShadow>
+          <boxGeometry args={[0.02, legH, seatD * 0.8]} />
+          {mat('#333', 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.6 })}
+        </mesh>
+      ))}
+      <ShapeLabel name={shape.name} position={[0, legH + 0.35, 0]} />
+    </group>
+  );
+}
+
+// ─── Sign / Board ─────────────────────────────────────────────
+function Sign3D({ shape, isSelected, onSelect, isDraggable }) {
+  const signW = (shape.signWidth || 60) * SCALE;
+  const signH = shape.signHeight || 0.4;
+  const poleH = shape.poleHeight || 0.8;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#1565c0';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => to3D(shape.x, shape.y, 0, shape.z || 0), [shape.x, shape.y, shape.z]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Pole */}
+      <mesh position={[0, poleH / 2 + elev, 0]} castShadow>
+        <cylinderGeometry args={[1.5 * SCALE, 2 * SCALE, poleH, 8]} />
+        {mat('#555', 0.9, isSelected, hovered, { roughness: 0.3, metalness: 0.6 })}
+      </mesh>
+      {/* Sign board */}
+      <mesh ref={meshRef} {...handlers} position={[0, poleH + signH / 2 + elev, 0]} castShadow>
+        <boxGeometry args={[signW, signH, 0.02]} />
+        {mat(fill, 0.85, isSelected, hovered, { roughness: 0.5 })}
+      </mesh>
+      {/* Text area (white) */}
+      <mesh position={[0, poleH + signH / 2 + elev, 0.012]}>
+        <boxGeometry args={[signW * 0.85, signH * 0.7, 0.005]} />
+        <meshStandardMaterial color="#ffffff" />
+      </mesh>
+      <ShapeLabel name={shape.name} position={[0, poleH + signH + 0.15 + elev, 0]} />
+    </group>
+  );
+}
+
+// ─── Container / Storage ──────────────────────────────────────
+function Container3D({ shape, isSelected, onSelect, isDraggable }) {
+  const cw = (shape.containerWidth || 150) * SCALE;
+  const cd = (shape.containerDepth || 60) * SCALE;
+  const ch = shape.containerHeight || 0.8;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#c62828';
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.containerWidth || 150) / 2) * SCALE;
+    const cz = -(shape.y + (shape.containerDepth || 60) / 2) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, shape.containerWidth, shape.containerDepth, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Main body */}
+      <mesh ref={meshRef} {...handlers} position={[0, ch / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[cw, ch, cd]} />
+        {mat(fill, 0.85, isSelected, hovered, { roughness: 0.6, metalness: 0.3 })}
+      </mesh>
+      {/* Corrugation ridges */}
+      {Array.from({ length: 6 }, (_, i) => {
+        const rx = -cw * 0.4 + i * (cw * 0.16);
+        return (
+          <group key={`r${i}`}>
+            <mesh position={[rx, ch / 2, cd / 2 + 0.003]}>
+              <boxGeometry args={[0.01, ch * 0.85, 0.005]} />
+              {mat('#000', 0.15, false, false)}
+            </mesh>
+            <mesh position={[rx, ch / 2, -cd / 2 - 0.003]}>
+              <boxGeometry args={[0.01, ch * 0.85, 0.005]} />
+              {mat('#000', 0.15, false, false)}
+            </mesh>
+          </group>
+        );
+      })}
+      <lineSegments position={[0, ch / 2, 0]}>
+        <edgesGeometry args={[new THREE.BoxGeometry(cw, ch, cd)]} />
+        <lineBasicMaterial color={isSelected ? '#fff' : '#333'} />
+      </lineSegments>
+      <ShapeLabel name={shape.name} position={[0, ch + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Parking Spot ─────────────────────────────────────────────
+function ParkingSpot3D({ shape, isSelected, onSelect, isDraggable }) {
+  const pw = (shape.spotWidth || 60) * SCALE;
+  const pd = (shape.spotDepth || 120) * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.spotWidth || 60) / 2) * SCALE;
+    const cz = -(shape.y + (shape.spotDepth || 120) / 2) * SCALE;
+    return [cx, elev + 0.005, cz];
+  }, [shape.x, shape.y, shape.spotWidth, shape.spotDepth, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Ground surface */}
+      <mesh ref={meshRef} {...handlers} receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[pw, pd]} />
+        {mat('#374151', 0.7, isSelected, hovered, { roughness: 0.95 })}
+      </mesh>
+      {/* White boundary lines (3 sides - open at front) */}
+      {[
+        { p: [-pw / 2, 0.002, 0], s: [0.015, 0.002, pd] },
+        { p: [pw / 2, 0.002, 0], s: [0.015, 0.002, pd] },
+        { p: [0, 0.002, pd / 2], s: [pw, 0.002, 0.015] },
+      ].map(({ p, s }, i) => (
+        <mesh key={`ln${i}`} position={p}>
+          <boxGeometry args={s} />
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+      ))}
+      {/* P marking */}
+      <Billboard position={[0, 0.01, 0]}>
+        <Text fontSize={pw * 0.4} color="#ffffff" anchorY="middle">P</Text>
+      </Billboard>
+      <ShapeLabel name={shape.name} position={[0, 0.3, 0]} />
+    </group>
+  );
+}
+
 // ═════════════════════════════════════════════════════════════════
 //  SHAPE DISPATCHER
 // ═════════════════════════════════════════════════════════════════
@@ -872,6 +1458,21 @@ function Shape3D({ shape, isSelected, onSelect, isDraggable }) {
     case 'cable':      return <Cable3D {...props} />;
     case 'path':       return <Path3D {...props} />;
     case 'road':       return <Road3D {...props} />;
+    // Structural & layout elements
+    case 'metalFrame': return <MetalFrame3D {...props} />;
+    case 'fence':      return <Fence3D {...props} />;
+    case 'gate':       return <Gate3D {...props} />;
+    case 'platform':   return <Platform3D {...props} />;
+    case 'stairs':     return <Stairs3D {...props} />;
+    case 'solarPanel': return <SolarPanel3D {...props} />;
+    case 'shed':       return <Shed3D {...props} />;
+    case 'gardenBed':  return <GardenBed3D {...props} />;
+    case 'pond':       return <Pond3D {...props} />;
+    case 'lampPost':   return <LampPost3D {...props} />;
+    case 'bench':      return <Bench3D {...props} />;
+    case 'sign':       return <Sign3D {...props} />;
+    case 'container':  return <Container3D {...props} />;
+    case 'parkingSpot':return <ParkingSpot3D {...props} />;
     default:
       return (
         <mesh position={to3D(shape.x || 0, shape.y || 0, 0.15)}
@@ -900,6 +1501,22 @@ const ELEMENT_CATALOG = [
   { type: 'cable',     icon: '⚡', label: 'Cable',   group: 'real',  dims: { length: 200, cableRadius: 2, postHeight: 0.5 } },
   { type: 'path',      icon: '👣', label: 'Path',    group: 'real',  dims: { width: 200, pathWidth: 30 } },
   { type: 'road',      icon: '🛣️', label: 'Road',    group: 'real',  dims: { width: 300, roadWidth: 60, roadSurface: 'tar' } },
+  // Structural & layout elements
+  { type: 'metalFrame', icon: '🏗️', label: 'Metal Frame', group: 'structure', dims: { frameWidth: 150, frameDepth: 100, frameHeight: 1.5, barThickness: 3 } },
+  { type: 'fence',      icon: '🏚️', label: 'Fence',       group: 'structure', dims: { width: 200, fenceHeight: 0.6 } },
+  { type: 'gate',       icon: '🚪', label: 'Gate',        group: 'structure', dims: { gateWidth: 80, gateHeight: 0.8 } },
+  { type: 'platform',   icon: '📋', label: 'Platform',    group: 'structure', dims: { width: 150, platformDepth: 120, platformHeight: 0.3 } },
+  { type: 'stairs',     icon: '🪜', label: 'Stairs',      group: 'structure', dims: { stairWidth: 60, stairDepth: 100, stairHeight: 0.8, stairSteps: 5 } },
+  { type: 'container',  icon: '📦', label: 'Container',   group: 'structure', dims: { containerWidth: 150, containerDepth: 60, containerHeight: 0.8 } },
+  // Outdoor & site elements
+  { type: 'solarPanel', icon: '☀️', label: 'Solar Panel', group: 'outdoor', dims: { panelWidth: 120, panelDepth: 80, panelTilt: 30, postHeight: 0.4 } },
+  { type: 'shed',       icon: '🏡', label: 'Shed',        group: 'outdoor', dims: { shedWidth: 100, shedDepth: 80, shedHeight: 0.6, shedRoofHeight: 0.25 } },
+  { type: 'gardenBed',  icon: '🌱', label: 'Garden Bed',  group: 'outdoor', dims: { bedWidth: 120, bedDepth: 60, bedHeight: 0.15 } },
+  { type: 'pond',       icon: '💦', label: 'Pond',        group: 'outdoor', dims: { pondRadius: 50, pondDepth: 0.1 } },
+  { type: 'lampPost',   icon: '💡', label: 'Lamp Post',   group: 'outdoor', dims: { poleHeight: 1.2 } },
+  { type: 'bench',      icon: '🪑', label: 'Bench',       group: 'outdoor', dims: { benchWidth: 80 } },
+  { type: 'sign',       icon: '🪧', label: 'Sign',        group: 'outdoor', dims: { signWidth: 60, signHeight: 0.4, poleHeight: 0.8 } },
+  { type: 'parkingSpot',icon: '🅿️', label: 'Parking',     group: 'outdoor', dims: { spotWidth: 60, spotDepth: 120 } },
 ];
 
 // Dimension labels
@@ -915,6 +1532,20 @@ const DIM_LABELS = {
   trunkRadius: 'Trunk R (px)', trunkHeight: 'Trunk Height (px)',
   canopyRadius: 'Canopy R (px)', roofHeight: 'Roof Height (px)',
   houseLength: 'Length (px)', houseWidth: 'Width (px)', houseHeight: 'Wall Height (px)',
+  // New element dimensions
+  frameWidth: 'Frame Width (px)', frameDepth: 'Frame Depth (px)',
+  frameHeight: 'Frame Height', barThickness: 'Bar Thickness (px)',
+  fenceHeight: 'Fence Height', gateWidth: 'Gate Width (px)', gateHeight: 'Gate Height',
+  platformDepth: 'Platform Depth (px)', platformHeight: 'Platform Height',
+  stairWidth: 'Width (px)', stairDepth: 'Depth (px)', stairHeight: 'Total Height', stairSteps: 'Steps',
+  containerWidth: 'Length (px)', containerDepth: 'Depth (px)', containerHeight: 'Height',
+  panelWidth: 'Panel Width (px)', panelDepth: 'Panel Depth (px)', panelTilt: 'Tilt Angle (°)',
+  shedWidth: 'Width (px)', shedDepth: 'Depth (px)', shedHeight: 'Wall Height', shedRoofHeight: 'Roof Height',
+  bedWidth: 'Bed Width (px)', bedDepth: 'Bed Depth (px)', bedHeight: 'Bed Height',
+  pondRadius: 'Radius (px)', pondDepth: 'Water Depth',
+  poleHeight: 'Pole Height', benchWidth: 'Width (px)',
+  signWidth: 'Sign Width (px)', signHeight: 'Sign Height',
+  spotWidth: 'Spot Width (px)', spotDepth: 'Spot Depth (px)',
 };
 
 // ─── Helper: compute wall endpoints for snapping ─────────────────
@@ -2265,6 +2896,7 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
   }, [selectedId, handleDeleteShape, undo, redo, linkingFrom, pushUndo, onShapesChange]);
 
   // Add new element
+  // Add new element
   const handleAddElement = useCallback((dims, name) => {
     if (!addingElement) return;
     pushUndo(shapesRef.current);
@@ -2564,18 +3196,21 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
         {draggingOrigin && <OriginDragHandler dragging={draggingOrigin} onMove={handleOriginDragMove} onEnd={handleOriginDragEnd} />}
 
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08}
-          minDistance={1} maxDistance={80}
+          minDistance={0.5} maxDistance={80}
           maxPolarAngle={isTopDown ? 0.01 : Math.PI / 2 - 0.05}
           enableRotate={!isTopDown && !moveLock}
           enablePan={!moveLock}
           enableZoom={!moveLock}
+          zoomSpeed={1.2}
+          panSpeed={isTopDown ? 1.5 : 1.0}
+          screenSpacePanning={true}
           mouseButtons={{
-            LEFT: (isTopDown || moveLock) ? undefined : THREE.MOUSE.ROTATE,
+            LEFT: moveLock ? undefined : (isTopDown ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE),
             MIDDLE: moveLock ? undefined : THREE.MOUSE.DOLLY,
             RIGHT: moveLock ? undefined : THREE.MOUSE.PAN,
           }}
           touches={{
-            ONE: (isTopDown || moveLock) ? undefined : THREE.TOUCH.ROTATE,
+            ONE: moveLock ? undefined : (isTopDown ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE),
             TWO: moveLock ? undefined : THREE.TOUCH.DOLLY_PAN,
           }}
           target={[bounds.cx, 0, bounds.cz]} />
@@ -2785,6 +3420,62 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
             </React.Fragment>
           );
         })}
+        <div className="three-toolbar-divider" />
+        <button
+          className="three-elem-btn three-export-catalog-btn"
+          onClick={() => {
+            const catalog = ELEMENT_CATALOG.map(elem => {
+              const dimEntries = Object.entries(elem.dims).map(([key, defaultValue]) => ({
+                key,
+                label: DIM_LABELS[key] || key,
+                defaultValue,
+                type: typeof defaultValue === 'string' ? 'string' : 'number',
+              }));
+              return {
+                type: elem.type,
+                icon: elem.icon,
+                label: elem.label,
+                group: elem.group,
+                capabilities: {
+                  draggable: true,
+                  rotatable: true,
+                  elevationZ: true,
+                  resizable: true,
+                  colorCustomizable: true,
+                  opacityControl: true,
+                  groupLinkable: true,
+                  snapToGrid: true,
+                  copyPaste: true,
+                  undoRedo: true,
+                  pointBased: ['pipe', 'cable', 'line', 'path_line'].includes(elem.type),
+                  roadSurfaces: elem.type === 'road',
+                  wallContinuation: elem.type === 'wall',
+                },
+                dimensions: dimEntries,
+                defaultDimensions: { ...elem.dims },
+              };
+            });
+            const exportData = {
+              name: 'PlantPlanner Element Catalog',
+              version: '1.0',
+              exportedAt: new Date().toISOString(),
+              totalElements: catalog.length,
+              groups: [...new Set(ELEMENT_CATALOG.map(e => e.group))],
+              elements: catalog,
+            };
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `element-catalog-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          title="Export full element catalog as JSON"
+        >
+          <span className="three-elem-icon">📋</span>
+          <span className="three-elem-label">Export Catalog</span>
+        </button>
       </div>
 
       {addingElement && (
