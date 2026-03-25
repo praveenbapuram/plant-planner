@@ -565,7 +565,9 @@ function Wall3D({ shape, isSelected, onSelect, isDraggable }) {
       <mesh position={isSloped ? [0, 0, 0] : [0, hL / 2, 0]}
         ref={meshRef} {...handlers} castShadow receiveShadow
         geometry={wallGeo}>
-        <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.15, 1) : opacity}
+        <meshStandardMaterial color={fill}
+          transparent={opacity < 1} opacity={hovered ? Math.min(opacity + 0.15, 1) : opacity}
+          depthWrite={opacity >= 0.95}
           emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.25 : 0}
           roughness={0.85} metalness={0.05} side={THREE.DoubleSide} />
       </mesh>
@@ -672,6 +674,140 @@ function Window3D({ shape, isSelected, onSelect, isDraggable }) {
   );
 }
 
+// ─── Pillar / Column ─────────────────────────────────────────
+function Pillar3D({ shape, isSelected, onSelect, isDraggable }) {
+  const r = (shape.pillarRadius || 8) * SCALE;
+  const h = shape.pillarHeight || 1.5;
+  const elev = (shape.z || 0) * SCALE;
+  const fill = rgbaToHex(shape.fill) || '#9e9e9e';
+  const opacity = shape.opacity ?? 1.0;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x || 0) * SCALE;
+    const cz = -(shape.y || 0) * SCALE;
+    return [cx, h / 2 + elev, cz];
+  }, [shape.x, shape.y, h, elev]);
+
+  return (
+    <group position={pos}>
+      {/* Main column */}
+      <mesh ref={meshRef} {...handlers} castShadow receiveShadow>
+        <cylinderGeometry args={[r, r * 1.05, h, 12]} />
+        <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.1, 1) : opacity}
+          roughness={0.4} metalness={0.6}
+          emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.25 : 0} />
+      </mesh>
+      {/* Base plate */}
+      <mesh position={[0, -h / 2 + 0.005, 0]} castShadow>
+        <cylinderGeometry args={[r * 1.5, r * 1.5, 0.01, 12]} />
+        <meshStandardMaterial color="#666" roughness={0.4} metalness={0.7} />
+      </mesh>
+      {/* Top plate */}
+      <mesh position={[0, h / 2 - 0.005, 0]} castShadow>
+        <cylinderGeometry args={[r * 1.3, r * 1.3, 0.012, 12]} />
+        <meshStandardMaterial color="#666" roughness={0.4} metalness={0.7} />
+      </mesh>
+      <ShapeLabel name={shape.name || 'Pillar'} position={[0, h / 2 + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Door ────────────────────────────────────────────────────
+function Door3D({ shape, isSelected, onSelect, isDraggable }) {
+  const dw = (shape.doorWidth || 45) * SCALE;
+  const dh = shape.doorHeight || 1.05;
+  const depth = 3 * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const fill = rgbaToHex(shape.fill) || '#8B4513';
+  const opacity = shape.opacity ?? 0.9;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x + (shape.doorWidth || 45) / 2) * SCALE;
+    const cz = -(shape.y + 2) * SCALE;
+    return [cx, dh / 2 + elev, cz];
+  }, [shape.x, shape.y, shape.doorWidth, dh, elev]);
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Door panel */}
+      <mesh ref={meshRef} {...handlers} castShadow receiveShadow>
+        <boxGeometry args={[dw, dh, depth]} />
+        <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.1, 1) : opacity}
+          roughness={0.7} metalness={0.1}
+          emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.2 : 0} />
+      </mesh>
+      {/* Frame */}
+      {[
+        { p: [0, dh / 2, 0], s: [dw + 0.02, 0.025, depth * 1.3] },
+        { p: [-dw / 2, 0, 0], s: [0.025, dh + 0.02, depth * 1.3] },
+        { p: [dw / 2, 0, 0], s: [0.025, dh + 0.02, depth * 1.3] },
+      ].map(({ p, s }, fi) => (
+        <mesh key={fi} position={p} castShadow>
+          <boxGeometry args={s} />
+          <meshStandardMaterial color="#5a3a1a" roughness={0.5} metalness={0.2} />
+        </mesh>
+      ))}
+      {/* Door handle */}
+      <mesh position={[dw / 2 - 0.03, 0, depth / 2 + 0.005]}>
+        <sphereGeometry args={[0.012, 8, 8]} />
+        <meshStandardMaterial color="#c0a030" roughness={0.2} metalness={0.8} />
+      </mesh>
+      <ShapeLabel name={shape.name || 'Door'} position={[0, dh / 2 + 0.15, 0]} />
+    </group>
+  );
+}
+
+// ─── Ventilator / Exhaust Fan ────────────────────────────────
+function Ventilator3D({ shape, isSelected, onSelect, isDraggable }) {
+  const r = (shape.ventRadius || 20) * SCALE;
+  const depth = 6 * SCALE;
+  const elev = (shape.z || 0) * SCALE;
+  const rot = (shape.rotation || 0) * Math.PI / 180;
+  const fill = rgbaToHex(shape.fill) || '#607d8b';
+  const opacity = shape.opacity ?? 0.9;
+  const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
+  const pos = useMemo(() => {
+    const cx = (shape.x || 0) * SCALE;
+    const cz = -(shape.y || 0) * SCALE;
+    return [cx, elev, cz];
+  }, [shape.x, shape.y, elev]);
+  const bladeCount = 6;
+
+  return (
+    <group position={pos} rotation={[0, -rot, 0]}>
+      {/* Circular housing */}
+      <mesh ref={meshRef} {...handlers} castShadow>
+        <cylinderGeometry args={[r, r, depth, 16, 1, true]} />
+        <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.1, 1) : opacity}
+          roughness={0.4} metalness={0.6} side={THREE.DoubleSide}
+          emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.25 : 0} />
+      </mesh>
+      {/* Back grille */}
+      <mesh position={[0, -depth / 2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[r * 0.95, 16]} />
+        <meshStandardMaterial color="#455a64" transparent opacity={0.4} roughness={0.3} metalness={0.7} side={THREE.DoubleSide} />
+      </mesh>
+      {/* Fan blades */}
+      {Array.from({ length: bladeCount }, (_, i) => {
+        const angle = (i / bladeCount) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[0, 0, 0]} rotation={[0, angle, 0]}>
+            <boxGeometry args={[r * 0.8, depth * 0.3, 0.005]} />
+            <meshStandardMaterial color="#b0bec5" roughness={0.3} metalness={0.5} />
+          </mesh>
+        );
+      })}
+      {/* Center hub */}
+      <mesh>
+        <cylinderGeometry args={[r * 0.15, r * 0.15, depth * 0.5, 8]} />
+        <meshStandardMaterial color="#333" roughness={0.3} metalness={0.7} />
+      </mesh>
+      <ShapeLabel name={shape.name || 'Ventilator'} position={[0, r + 0.1, 0]} />
+    </group>
+  );
+}
+
 // ─── Metal Sheet / Roofing ────────────────────────────────────
 function MetalSheet3D({ shape, isSelected, onSelect, isDraggable }) {
   const sw = (shape.sheetWidth || 200) * SCALE;
@@ -679,6 +815,11 @@ function MetalSheet3D({ shape, isSelected, onSelect, isDraggable }) {
   const elev = (shape.z || 0) * SCALE;
   const tilt = (shape.sheetTilt || 0) * Math.PI / 180;
   const rot = (shape.rotation || 0) * Math.PI / 180;
+  // Height-based slope: left edge vs right edge elevation (world units)
+  const elevL = shape.sheetElevLeft != null ? shape.sheetElevLeft : 0;
+  const elevR = shape.sheetElevRight != null ? shape.sheetElevRight : 0;
+  const isSloped = Math.abs(elevL - elevR) > 0.001;
+  const THICK = 0.008; // sheet thickness
   const fill = rgbaToHex(shape.fill) || '#78909c';
   const opacity = shape.opacity ?? 0.85;
   const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
@@ -688,31 +829,80 @@ function MetalSheet3D({ shape, isSelected, onSelect, isDraggable }) {
     return [cx, elev, cz];
   }, [shape.x, shape.y, shape.sheetWidth, shape.sheetDepth, elev]);
 
+  // Custom geometry for sloped sheet (left edge at elevL, right edge at elevR)
+  const sheetGeo = useMemo(() => {
+    if (!isSloped) return null; // use box for flat sheets
+    const hw = sw / 2, hd = sd / 2;
+    const g = new THREE.BufferGeometry();
+    // 6 faces × 4 verts — slab with left side at yL, right side at yR
+    const yL = elevL, yR = elevR;
+    const verts = new Float32Array([
+      // Front face (z = +hd)
+      -hw, yL, hd,    hw, yR, hd,    hw, yR + THICK, hd,   -hw, yL + THICK, hd,
+      // Back face (z = -hd)
+       hw, yR, -hd,  -hw, yL, -hd,  -hw, yL + THICK, -hd,  hw, yR + THICK, -hd,
+      // Top face (sloped)
+      -hw, yL + THICK, hd,   hw, yR + THICK, hd,   hw, yR + THICK, -hd,  -hw, yL + THICK, -hd,
+      // Bottom face (sloped)
+      -hw, yL, -hd,   hw, yR, -hd,   hw, yR, hd,   -hw, yL, hd,
+      // Left face
+      -hw, yL, -hd,  -hw, yL, hd,  -hw, yL + THICK, hd,  -hw, yL + THICK, -hd,
+      // Right face
+       hw, yR, hd,    hw, yR, -hd,   hw, yR + THICK, -hd,  hw, yR + THICK, hd,
+    ]);
+    const indices = new Uint16Array([
+      0,1,2, 0,2,3,    4,5,6, 4,6,7,    8,9,10, 8,10,11,
+      12,13,14, 12,14,15, 16,17,18, 16,18,19, 20,21,22, 20,22,23,
+    ]);
+    g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    g.setIndex(new THREE.BufferAttribute(indices, 1));
+    g.computeVertexNormals();
+    return g;
+  }, [sw, sd, elevL, elevR, isSloped]);
+
   // Corrugation ridges count
   const ridges = Math.max(3, Math.floor(sd / (8 * SCALE)));
 
+  const matProps = {
+    color: fill,
+    transparent: opacity < 1,
+    opacity: hovered ? Math.min(opacity + 0.1, 1) : opacity,
+    depthWrite: opacity >= 0.9,
+    roughness: 0.25, metalness: 0.75,
+    side: THREE.DoubleSide,
+    emissive: isSelected ? fill : '#000',
+    emissiveIntensity: isSelected ? 0.25 : 0,
+  };
+
   return (
     <group position={pos} rotation={[0, -rot, 0]}>
-      <group rotation={[-tilt, 0, 0]}>
-        {/* Main sheet */}
-        <mesh ref={meshRef} {...handlers} castShadow receiveShadow>
-          <boxGeometry args={[sw, 0.008, sd]} />
-          <meshStandardMaterial color={fill} transparent opacity={hovered ? Math.min(opacity + 0.1, 1) : opacity}
-            roughness={0.25} metalness={0.75} side={THREE.DoubleSide}
-            emissive={isSelected ? fill : '#000'} emissiveIntensity={isSelected ? 0.25 : 0} />
-        </mesh>
+      <group rotation={isSloped ? [0, 0, 0] : [-tilt, 0, 0]}>
+        {/* Main sheet — sloped custom geometry or flat box */}
+        {isSloped ? (
+          <mesh ref={meshRef} {...handlers} castShadow receiveShadow geometry={sheetGeo}>
+            <meshStandardMaterial {...matProps} />
+          </mesh>
+        ) : (
+          <mesh ref={meshRef} {...handlers} castShadow receiveShadow>
+            <boxGeometry args={[sw, THICK, sd]} />
+            <meshStandardMaterial {...matProps} />
+          </mesh>
+        )}
         {/* Corrugation ridges */}
         {Array.from({ length: ridges }, (_, i) => {
           const rz = -sd / 2 + (i + 0.5) * (sd / ridges);
+          // For sloped sheets, interpolate ridge Y across width
+          const ridgeY = isSloped ? (elevL + elevR) / 2 + THICK : THICK;
           return (
-            <mesh key={`ridge${i}`} position={[0, 0.008, rz]}>
+            <mesh key={`ridge${i}`} position={[0, ridgeY, rz]}
+              rotation={isSloped ? [0, 0, -Math.atan2(elevR - elevL, sw)] : [0, 0, 0]}>
               <boxGeometry args={[sw * 0.98, 0.006, 0.005]} />
               <meshStandardMaterial color={fill} roughness={0.2} metalness={0.8} />
             </mesh>
           );
         })}
       </group>
-      <ShapeLabel name={shape.name || 'Metal Sheet'} position={[0, 0.3, 0]} />
+      <ShapeLabel name={shape.name || 'Metal Sheet'} position={[0, Math.max(elevL, elevR) + 0.3, 0]} />
     </group>
   );
 }
@@ -1683,6 +1873,9 @@ function Shape3D({ shape, isSelected, onSelect, isDraggable }) {
     case 'tree':       return <Tree3D {...props} />;
     case 'wall':       return <Wall3D {...props} />;
     case 'window':     return <Window3D {...props} />;
+    case 'pillar':     return <Pillar3D {...props} />;
+    case 'door':       return <Door3D {...props} />;
+    case 'ventilator': return <Ventilator3D {...props} />;
     case 'pipe':       return <Pipe3D {...props} />;
     case 'cable':      return <Cable3D {...props} />;
     case 'path':       return <Path3D {...props} />;
@@ -1737,6 +1930,8 @@ const ELEMENT_CATALOG = [
   { type: 'house',     icon: '🏠', label: 'House',   group: 'building', dims: { houseLength: 120, houseWidth: 100, houseHeight: 80, roofHeight: 40 } },
   { type: 'wall',      icon: '🧱', label: 'Wall',    group: 'building', dims: { width: 200, thickness: 10, extrudeHeight: 1.0, wallHeightLeft: 1.0, wallHeightRight: 1.0 } },
   { type: 'window',    icon: '🪟', label: 'Window',  group: 'building', dims: { windowWidth: 60, windowHeight: 50 } },
+  { type: 'door',      icon: '🚪', label: 'Door',    group: 'building', dims: { doorWidth: 45, doorHeight: 1.05 } },
+  { type: 'pillar',    icon: '🏛️', label: 'Pillar',  group: 'building', dims: { pillarRadius: 8, pillarHeight: 1.5 } },
   { type: 'shed',      icon: '🏡', label: 'Shed',    group: 'building', dims: { shedWidth: 100, shedDepth: 80, shedHeight: 0.6, shedRoofHeight: 0.25 } },
   // ── Infrastructure ──
   { type: 'tank',      icon: '🛢️', label: 'Tank',    group: 'infra',  dims: { radius: 40, extrudeHeight: 1.0 } },
@@ -1744,8 +1939,9 @@ const ELEMENT_CATALOG = [
   { type: 'cable',     icon: '⚡', label: 'Cable',   group: 'infra',  dims: { length: 200, cableRadius: 2, postHeight: 0.5 } },
   { type: 'path',      icon: '👣', label: 'Path',    group: 'infra',  dims: { width: 200, pathWidth: 30 } },
   { type: 'road',      icon: '🛣️', label: 'Road',    group: 'infra',  dims: { width: 300, roadWidth: 60, roadSurface: 'tar' } },
+  { type: 'ventilator',icon: '🌀', label: 'Ventilator', group: 'infra', dims: { ventRadius: 20 } },
   // ── Materials ──
-  { type: 'metalSheet',   icon: '🔩', label: 'Metal Sheet',   group: 'material', dims: { sheetWidth: 200, sheetDepth: 150, sheetTilt: 0 } },
+  { type: 'metalSheet',   icon: '🔩', label: 'Metal Sheet',   group: 'material', dims: { sheetWidth: 200, sheetDepth: 150, sheetTilt: 0, sheetElevLeft: 0, sheetElevRight: 0 } },
   { type: 'concreteSlab', icon: '🪨', label: 'Concrete Slab', group: 'material', dims: { slabWidth: 200, slabDepth: 150, slabThickness: 0.08 } },
   // ── Structure ──
   { type: 'metalFrame', icon: '🏗️', label: 'Metal Frame', group: 'structure', dims: { frameWidth: 150, frameDepth: 100, frameHeight: 1.5, barThickness: 3 } },
@@ -1780,7 +1976,7 @@ const DIM_LABELS = {
   houseLength: 'Length (px)', houseWidth: 'Width (px)', houseHeight: 'Wall Height (px)',
   wallHeightLeft: 'Left Height', wallHeightRight: 'Right Height',
   windowWidth: 'Width (px)', windowHeight: 'Height (px)',
-  sheetWidth: 'Sheet Width (px)', sheetDepth: 'Sheet Depth (px)', sheetTilt: 'Tilt Angle (°)',
+  sheetWidth: 'Sheet Width (px)', sheetDepth: 'Sheet Depth (px)', sheetTilt: 'Tilt Angle (°)', sheetElevLeft: 'Left Edge Height', sheetElevRight: 'Right Edge Height',
   slabWidth: 'Slab Width (px)', slabDepth: 'Slab Depth (px)', slabThickness: 'Thickness',
   // New element dimensions
   frameWidth: 'Frame Width (px)', frameDepth: 'Frame Depth (px)',
@@ -1796,6 +1992,9 @@ const DIM_LABELS = {
   poleHeight: 'Pole Height', benchWidth: 'Width (px)',
   signWidth: 'Sign Width (px)', signHeight: 'Sign Height',
   spotWidth: 'Spot Width (px)', spotDepth: 'Spot Depth (px)',
+  doorWidth: 'Door Width (px)', doorHeight: 'Door Height',
+  pillarRadius: 'Radius (px)', pillarHeight: 'Pillar Height',
+  ventRadius: 'Vent Radius (px)',
 };
 
 // ─── Helper: compute wall endpoints for snapping ─────────────────
@@ -2043,6 +2242,23 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
               </button>
             </div>
           )}
+        </>
+      )}
+
+      {/* Metal Sheet */}
+      {t === 'metalSheet' && (
+        <>
+          <PropInput label="Width" value={uVal(shape.sheetWidth || 200)} unit={sym} step={uStep} onChange={(v) => onUpdateShape(shape.id, { sheetWidth: pxFromInput(v) })} />
+          <PropInput label="Depth" value={uVal(shape.sheetDepth || 150)} unit={sym} step={uStep} onChange={(v) => onUpdateShape(shape.id, { sheetDepth: pxFromInput(v) })} />
+          <PropInput label="Tilt °" value={parseFloat((shape.sheetTilt || 0).toFixed(1))} unit="°" step={1} min={-45} max={45}
+            onChange={(v) => onUpdateShape(shape.id, { sheetTilt: v })} />
+          <div className="three-prop-divider" />
+          <div className="three-prop-row"><span className="three-prop-label" style={{ fontWeight: 600, color: '#f59e0b' }}>Sloped Sheet</span></div>
+          <PropInput label="Left H" value={parseFloat((shape.sheetElevLeft != null ? shape.sheetElevLeft : 0).toFixed(2))} unit="" step={0.05} min={0}
+            onChange={(v) => onUpdateShape(shape.id, { sheetElevLeft: v })} />
+          <PropInput label="Right H" value={parseFloat((shape.sheetElevRight != null ? shape.sheetElevRight : 0).toFixed(2))} unit="" step={0.05} min={0}
+            onChange={(v) => onUpdateShape(shape.id, { sheetElevRight: v })} />
+          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>Set different left/right heights to create a sloped roof. Values are in world units relative to the sheet&apos;s Z elevation.</div>
         </>
       )}
 
@@ -2310,6 +2526,8 @@ function DimensionModal({ elementDef, onConfirm, onCancel, unit, pxPerUnit }) {
     'stairHeight', 'containerHeight',
     'shedHeight', 'shedRoofHeight', 'bedHeight',
     'signHeight', 'slabThickness', 'frameHeight', 'pondDepth',
+    'doorHeight', 'pillarHeight',
+    'sheetElevLeft', 'sheetElevRight',
   ]);
   const is3DKey = (k) => WORLD_UNIT_KEYS.has(k);
   const isUnitless = (k) => k.includes('angle') || k.includes('Tilt') || k === 'sides' || k === 'lineType' || k === 'roadSurface' || k === 'stairSteps';
@@ -3341,6 +3559,178 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
     setAddingElement(null);
   }, [addingElement, bounds, onShapesChange]);
 
+  // ─── Load Preset Design ───
+  const handleLoadPreset = useCallback((presetName) => {
+    const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${Math.random().toString(36).slice(2, 6)}`;
+    const PPU = 15, SC = 0.01;
+    const ft = (f) => f * PPU;
+    const ftH = (f) => f * PPU * SC;
+
+    if (presetName === 'penthouse-28x14') {
+      // ════════════════════════════════════════════════════════════
+      // EAST-FACING PENTHOUSE — 28×14ft — ANDHRA VASTU SHASTRA
+      // ════════════════════════════════════════════════════════════
+      // 28ft S→N (y-axis), 14ft W→E (x-axis), East face is front
+      // Vastu: Main door in NE quadrant of east wall
+      //        SW = heavy (tank, stairs, thick wall)
+      //        NE = open, light, water element (Tulasi, pond)
+      //        Max windows on North & East; none on West; minimal on South
+      //        Roof slopes W→E (water flows East/NE = auspicious)
+      //        Overhead water tank on SW roof corner
+      const OX = ft(8), OY = ft(8); // more margin for NE garden
+      const BW = ft(14), BD = ft(28), OH = ft(10);
+      const H_W = ftH(12), H_E = ftH(10);
+      const TH = 12;
+      const DOOR_W = ft(3.5), DOOR_H = ftH(7);
+      const WIN_Y = ft(3.5);
+      const wallColor = '#a8a29e';
+      const backWallColor = '#8d8680';
+
+      // Door in NE quadrant: door gap starts at ~65% along the 28ft north-south run
+      // (measuring from south). South seg is longer, north seg shorter.
+      const doorStart = BD * 0.65; // 18.2ft from south
+      const southSegLen = doorStart;
+      const northSegLen = BD - doorStart - DOOR_W - ft(0.5);
+
+      const shapes = [
+        // ═══ WALLS — all opacity 1.0, TH overlap at corners ═══
+
+        // SOUTH wall (14ft E-W) — Vastu: minimal openings on south
+        { id: uid(), type: 'wall', name: 'South Wall', x: OX - TH / 2, y: OY - TH / 2,
+          width: BW + TH, thickness: TH,
+          wallHeightLeft: H_W, wallHeightRight: H_E, extrudeHeight: H_W,
+          fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 0,
+          windows: [] }, // NO south windows per Vastu (Yama direction)
+
+        // NORTH wall (14ft E-W) — Vastu: maximum openings on north (Kubera)
+        { id: uid(), type: 'wall', name: 'North Wall', x: OX - TH / 2, y: OY + BD - TH / 2,
+          width: BW + TH, thickness: TH,
+          wallHeightLeft: H_W, wallHeightRight: H_E, extrudeHeight: H_W,
+          fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 0,
+          windows: [
+            { width: ft(2.5), height: ft(2), offsetX: -ft(2), offsetY: WIN_Y },
+            { width: ft(2.5), height: ft(2), offsetX: ft(2.5), offsetY: WIN_Y },
+          ] }, // 2 windows on north — prosperity direction
+
+        // WEST wall (28ft N-S, rotation=90) — SOLID, NO WINDOWS — blocks afternoon sun
+        { id: uid(), type: 'wall', name: 'West Wall (Back)', x: OX - TH / 2, y: OY - TH / 2,
+          width: BD + TH, thickness: TH,
+          wallHeightLeft: H_W, wallHeightRight: H_W, extrudeHeight: H_W,
+          fill: backWallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 90, windows: [] },
+
+        // EAST wall — South segment (long, south of door, 2 windows)
+        { id: uid(), type: 'wall', name: 'East Wall (South)', x: OX + BW - TH / 2, y: OY - TH / 2,
+          width: southSegLen + TH / 2, thickness: TH,
+          wallHeightLeft: H_E, wallHeightRight: H_E, extrudeHeight: H_E,
+          fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 90,
+          windows: [
+            { width: ft(2.5), height: ft(2), offsetX: ft(3), offsetY: WIN_Y },
+            { width: ft(2.5), height: ft(2), offsetX: -ft(4), offsetY: WIN_Y },
+          ] },
+
+        // EAST wall — North segment (short, north of door, 1 window)
+        { id: uid(), type: 'wall', name: 'East Wall (North)', x: OX + BW - TH / 2, y: OY + southSegLen + DOOR_W + ft(0.5),
+          width: northSegLen + TH / 2, thickness: TH,
+          wallHeightLeft: H_E, wallHeightRight: H_E, extrudeHeight: H_E,
+          fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 90,
+          windows: [
+            { width: ft(2.5), height: ft(2), offsetX: 0, offsetY: WIN_Y },
+          ] },
+
+        // ═══ DOOR — NE quadrant of east wall (Vastu auspicious pada) ═══
+        { id: uid(), type: 'door', name: 'Main Door (NE Vastu)',
+          x: OX + BW - DOOR_W / 2, y: OY + southSegLen,
+          doorWidth: DOOR_W, doorHeight: DOOR_H,
+          fill: '#8B4513', stroke: '#5a3a1a', strokeWidth: 2, opacity: 1.0, rotation: 90 },
+
+        // ═══ METAL SHEET ROOF (slopes W→E, water drains East) ═══
+        { id: uid(), type: 'metalSheet', name: 'Main Roof', x: OX - ft(0.5), y: OY - ft(0.5),
+          sheetWidth: BW + ft(1), sheetDepth: BD + ft(1), sheetTilt: 5,
+          z: H_E / SC, fill: '#607d8b', stroke: '#455a64', strokeWidth: 1, opacity: 1.0, rotation: 0 },
+        { id: uid(), type: 'metalSheet', name: 'Front Overhang (10ft)', x: OX + BW, y: OY - ft(0.5),
+          sheetWidth: OH, sheetDepth: BD + ft(1), sheetTilt: 3,
+          z: H_E / SC, fill: '#78909c', stroke: '#455a64', strokeWidth: 1, opacity: 0.95, rotation: 0 },
+
+        // ═══ OVERHANG PILLARS ═══
+        { id: uid(), type: 'pillar', name: 'Pillar SE', x: OX + BW + OH - ft(0.5), y: OY + ft(1),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
+        { id: uid(), type: 'pillar', name: 'Pillar NE', x: OX + BW + OH - ft(0.5), y: OY + BD - ft(1),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
+        { id: uid(), type: 'pillar', name: 'Pillar Mid-S', x: OX + BW + OH - ft(0.5), y: OY + ft(10),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
+        { id: uid(), type: 'pillar', name: 'Pillar Mid-N', x: OX + BW + OH - ft(0.5), y: OY + ft(18),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
+
+        // ═══ FOUNDATION ═══
+        { id: uid(), type: 'concreteSlab', name: 'Foundation', x: OX - ft(0.5), y: OY - ft(0.5),
+          slabWidth: BW + ft(1), slabDepth: BD + ft(1), slabThickness: 0.05, z: 0,
+          fill: '#bdbdbd', stroke: '#999', strokeWidth: 1, opacity: 1.0 },
+        { id: uid(), type: 'concreteSlab', name: 'Overhang Floor', x: OX + BW, y: OY - ft(0.5),
+          slabWidth: OH + ft(0.5), slabDepth: BD + ft(1), slabThickness: 0.04, z: 0,
+          fill: '#c8c8c8', stroke: '#aaa', strokeWidth: 1, opacity: 1.0 },
+
+        // ═══ 1000L WATER TANK — Vastu: SW corner of roof (overhead) ═══
+        // 1000L ≈ 3.3ft dia × 4.3ft tall
+        { id: uid(), type: 'tank', name: '1000L Tank (Vastu SW)',
+          x: OX + ft(2), y: OY + ft(2),  // SW corner of building
+          radius: ft(1.65), extrudeHeight: ftH(4.3),
+          z: H_W / SC + 2,  // on top of the higher west-side roof
+          fill: '#1565c0', stroke: '#0d47a1', strokeWidth: 2, opacity: 1.0 },
+
+        // ═══ VASTU: NE corner — open, light, water element ═══
+        // Small Tulasi/herb garden (Vastu: NE should be green, open)
+        { id: uid(), type: 'gardenBed', name: 'Tulasi Garden (Vastu NE)',
+          x: OX + BW + ft(2), y: OY + BD - ft(4),
+          bedWidth: ft(4), bedDepth: ft(3), bedHeight: 0.08,
+          fill: '#4caf50', stroke: '#388e3c', strokeWidth: 1, opacity: 0.9 },
+        // Small pond/water feature in NE (Vastu: water source in NE Ishanya)
+        { id: uid(), type: 'pond', name: 'Water Feature (Vastu NE)',
+          x: OX + BW + ft(3), y: OY + BD + ft(2),
+          pondRadius: ft(2), pondDepth: 0.06,
+          fill: '#42a5f5', stroke: '#1e88e5', strokeWidth: 1, opacity: 0.85 },
+
+        // ═══ VENTILATORS (hot air exhaust, west upper wall) ═══
+        { id: uid(), type: 'ventilator', name: 'Exhaust Vent 1', x: OX + ft(1), y: OY + ft(7),
+          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90 },
+        { id: uid(), type: 'ventilator', name: 'Exhaust Vent 2', x: OX + ft(1), y: OY + ft(14),
+          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90 },
+        { id: uid(), type: 'ventilator', name: 'Exhaust Vent 3', x: OX + ft(1), y: OY + ft(21),
+          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90 },
+
+        // ═══ SHADE TREES — Vastu: SW & S side (Nairuthi heavy) ═══
+        { id: uid(), type: 'tree', name: 'Shade Tree SW1', x: OX - ft(6), y: OY + ft(3),
+          trunkRadius: 5, trunkHeight: 0.55, canopyRadius: ft(3), extrudeHeight: 1.1,
+          fill: '#2e7d32', stroke: '#1b5e20', opacity: 0.9 },
+        { id: uid(), type: 'tree', name: 'Shade Tree SW2', x: OX - ft(6), y: OY + ft(9),
+          trunkRadius: 5, trunkHeight: 0.55, canopyRadius: ft(3), extrudeHeight: 1.1,
+          fill: '#2e7d32', stroke: '#1b5e20', opacity: 0.9 },
+        { id: uid(), type: 'tree', name: 'Shade Tree W3', x: OX - ft(6), y: OY + ft(15),
+          trunkRadius: 4, trunkHeight: 0.5, canopyRadius: ft(2.5), extrudeHeight: 1.0,
+          fill: '#388e3c', stroke: '#2e7d32', opacity: 0.9 },
+        // NW side — lighter/smaller tree (Vastu: NW less heavy than SW)
+        { id: uid(), type: 'tree', name: 'Tree NW', x: OX - ft(5), y: OY + ft(24),
+          trunkRadius: 3, trunkHeight: 0.4, canopyRadius: ft(2), extrudeHeight: 0.8,
+          fill: '#4caf50', stroke: '#388e3c', opacity: 0.85 },
+
+        // ═══ STAIRS — Vastu: SW direction ═══
+        { id: uid(), type: 'stairs', name: 'Steps (Vastu SW)',
+          x: OX + BW + ft(0.5), y: OY + ft(2),  // South side of east entrance
+          stairWidth: ft(4), stairDepth: ft(3), stairHeight: 0.12, stairSteps: 3,
+          fill: '#bdbdbd', stroke: '#999', strokeWidth: 1, opacity: 1.0, rotation: 90 },
+
+        // ═══ LAMP — Vastu: NE entrance ═══
+        { id: uid(), type: 'lampPost', name: 'Lamp (Vastu NE)',
+          x: OX + BW + ft(5), y: OY + BD - ft(4),  // NE area near door
+          poleHeight: ftH(8), fill: '#ffeb3b', opacity: 1.0 },
+      ];
+
+      pushUndo(shapesRef.current);
+      setLocalShapes(shapes);
+      onShapesChange?.(shapes);
+      setSelectedId(null);
+    }
+  }, [pushUndo, onShapesChange]);
+
   // ─── DOM-level drag callbacks (called by DomDragSystem) ───
   const handleDomDragStart = useCallback((shapeId) => {
     pushUndo(shapesRef.current);
@@ -3818,6 +4208,20 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
           onClick={() => setRatioLocked(prev => !prev)}
           title={ratioLocked ? 'Unlock conversion ratio' : 'Lock conversion ratio'}>
           {ratioLocked ? '🔒' : '🔓'}
+        </button>
+      </div>
+
+      {/* Preset Designs */}
+      <div className="three-preset-bar glass">
+        <span className="three-preset-label">Presets:</span>
+        <button className="three-preset-btn" title="Load East-Facing Penthouse 28×14 ft with metal roof + 10ft overhang"
+          onClick={() => {
+            if (localShapes.length > 0 && !window.confirm('This will replace your current design. Continue?')) return;
+            handleLoadPreset('penthouse-28x14');
+            // Auto-switch to feet
+            handleUnitChange('ft');
+          }}>
+          🏠 Penthouse 28×14ft
         </button>
       </div>
 
