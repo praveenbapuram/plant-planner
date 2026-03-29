@@ -17,33 +17,33 @@ const EXTRUDE_HEIGHT = 0.3;
 
 // Unit definitions: label, default pxPerUnit, grid cell (in unit), grid section (in unit)
 const UNIT_DEFS = {
-  px: { label: 'PX',  defaultPPU: 1,  gridCell: 50,  gridSection: 250, symbol: 'px' },
-  m:  { label: 'M',   defaultPPU: 50, gridCell: 1,   gridSection: 5,   symbol: 'm'  },
-  ft: { label: 'FT',  defaultPPU: 15, gridCell: 1,   gridSection: 5,   symbol: 'ft' },
+  px: { label: 'PX', defaultPPU: 1, gridCell: 50, gridSection: 250, symbol: 'px' },
+  m: { label: 'M', defaultPPU: 50, gridCell: 1, gridSection: 5, symbol: 'm' },
+  ft: { label: 'FT', defaultPPU: 15, gridCell: 1, gridSection: 5, symbol: 'ft' },
 };
 
 const LINE_TYPE_COLORS = {
-  general:    '#ffffff',
-  piping:     '#06b6d4',
+  general: '#ffffff',
+  piping: '#06b6d4',
   electrical: '#f59e0b',
-  fencing:    '#94a3b8',
-  pathway:    '#34d399',
+  fencing: '#94a3b8',
+  pathway: '#34d399',
 };
 
 const VIEW_PRESETS = {
-  perspective: { label: 'Free',  icon: '🎥', ortho: false },
-  top:         { label: 'Top',   icon: '⬇️', ortho: true  },
-  front:       { label: 'Front', icon: '👁️', ortho: true  },
-  right:       { label: 'Right', icon: '➡️', ortho: true  },
+  perspective: { label: 'Free', icon: '🎥', ortho: false },
+  top: { label: 'Top', icon: '⬇️', ortho: true },
+  front: { label: 'Front', icon: '👁️', ortho: true },
+  right: { label: 'Right', icon: '➡️', ortho: true },
 };
 
 // 6 standard engineering view definitions
 const SIX_VIEWS = [
-  { key: 'front',  label: 'Front',  cam: (cx, cz, d) => ({ pos: [cx, 0, cz + d], up: [0, 1, 0] }) },
-  { key: 'back',   label: 'Back',   cam: (cx, cz, d) => ({ pos: [cx, 0, cz - d], up: [0, 1, 0] }) },
-  { key: 'left',   label: 'Left',   cam: (cx, cz, d) => ({ pos: [cx - d, 0, cz], up: [0, 1, 0] }) },
-  { key: 'right',  label: 'Right',  cam: (cx, cz, d) => ({ pos: [cx + d, 0, cz], up: [0, 1, 0] }) },
-  { key: 'top',    label: 'Top',    cam: (cx, cz, d) => ({ pos: [cx, d, cz + 0.001], up: [0, 0, -1] }) },
+  { key: 'front', label: 'Front', cam: (cx, cz, d) => ({ pos: [cx, 0, cz + d], up: [0, 1, 0] }) },
+  { key: 'back', label: 'Back', cam: (cx, cz, d) => ({ pos: [cx, 0, cz - d], up: [0, 1, 0] }) },
+  { key: 'left', label: 'Left', cam: (cx, cz, d) => ({ pos: [cx - d, 0, cz], up: [0, 1, 0] }) },
+  { key: 'right', label: 'Right', cam: (cx, cz, d) => ({ pos: [cx + d, 0, cz], up: [0, 1, 0] }) },
+  { key: 'top', label: 'Top', cam: (cx, cz, d) => ({ pos: [cx, d, cz + 0.001], up: [0, 0, -1] }) },
   { key: 'bottom', label: 'Bottom', cam: (cx, cz, d) => ({ pos: [cx, -d, cz + 0.001], up: [0, 0, 1] }) },
 ];
 
@@ -400,10 +400,10 @@ function Tank3D({ shape, isSelected, onSelect, isDraggable }) {
 // ─── House (box body + triangular roof) ──────────────────────────
 function House3D({ shape, isSelected, onSelect, isDraggable }) {
   // All dims in px, converted with SCALE for 3D
-  const len  = (shape.houseLength || shape.width || 120) * SCALE;  // X axis
-  const wid  = (shape.houseWidth  || shape.depth || 100) * SCALE;  // Z axis
+  const len = (shape.houseLength || shape.width || 120) * SCALE;  // X axis
+  const wid = (shape.houseWidth || shape.depth || 100) * SCALE;  // Z axis
   const wallH = (shape.houseHeight || 80) * SCALE;                 // Y axis (wall height)
-  const roofH = (shape.roofHeight  || 40) * SCALE;                 // Y axis (roof above walls)
+  const roofH = (shape.roofHeight || 40) * SCALE;                 // Y axis (roof above walls)
   const elev = (shape.z || 0) * SCALE;
   const { hovered, handlers, meshRef } = useMeshInteraction(shape.id, onSelect, isDraggable);
   const pos = useMemo(() => {
@@ -534,21 +534,21 @@ function Wall3D({ shape, isSelected, onSelect, isDraggable }) {
     const g = new THREE.BufferGeometry();
     const verts = new Float32Array([
       // Front face (z = +ht): left side height hL, right side hR
-      -hw, 0, ht,   hw, 0, ht,   hw, hR, ht,   -hw, hL, ht,
+      -hw, 0, ht, hw, 0, ht, hw, hR, ht, -hw, hL, ht,
       // Back face (z = -ht)
-      hw, 0, -ht,   -hw, 0, -ht,  -hw, hL, -ht,  hw, hR, -ht,
+      hw, 0, -ht, -hw, 0, -ht, -hw, hL, -ht, hw, hR, -ht,
       // Top face (sloped)
-      -hw, hL, ht,  hw, hR, ht,   hw, hR, -ht,  -hw, hL, -ht,
+      -hw, hL, ht, hw, hR, ht, hw, hR, -ht, -hw, hL, -ht,
       // Bottom face
-      -hw, 0, -ht,  hw, 0, -ht,   hw, 0, ht,    -hw, 0, ht,
+      -hw, 0, -ht, hw, 0, -ht, hw, 0, ht, -hw, 0, ht,
       // Left face
-      -hw, 0, -ht,  -hw, 0, ht,   -hw, hL, ht,  -hw, hL, -ht,
+      -hw, 0, -ht, -hw, 0, ht, -hw, hL, ht, -hw, hL, -ht,
       // Right face
-      hw, 0, ht,    hw, 0, -ht,   hw, hR, -ht,  hw, hR, ht,
+      hw, 0, ht, hw, 0, -ht, hw, hR, -ht, hw, hR, ht,
     ]);
     const indices = new Uint16Array([
-      0,1,2, 0,2,3,     4,5,6, 4,6,7,     8,9,10, 8,10,11,
-      12,13,14, 12,14,15, 16,17,18, 16,18,19, 20,21,22, 20,22,23,
+      0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11,
+      12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23,
     ]);
     g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
     g.setIndex(new THREE.BufferAttribute(indices, 1));
@@ -838,21 +838,21 @@ function MetalSheet3D({ shape, isSelected, onSelect, isDraggable }) {
     const yL = elevL, yR = elevR;
     const verts = new Float32Array([
       // Front face (z = +hd)
-      -hw, yL, hd,    hw, yR, hd,    hw, yR + THICK, hd,   -hw, yL + THICK, hd,
+      -hw, yL, hd, hw, yR, hd, hw, yR + THICK, hd, -hw, yL + THICK, hd,
       // Back face (z = -hd)
-       hw, yR, -hd,  -hw, yL, -hd,  -hw, yL + THICK, -hd,  hw, yR + THICK, -hd,
+      hw, yR, -hd, -hw, yL, -hd, -hw, yL + THICK, -hd, hw, yR + THICK, -hd,
       // Top face (sloped)
-      -hw, yL + THICK, hd,   hw, yR + THICK, hd,   hw, yR + THICK, -hd,  -hw, yL + THICK, -hd,
+      -hw, yL + THICK, hd, hw, yR + THICK, hd, hw, yR + THICK, -hd, -hw, yL + THICK, -hd,
       // Bottom face (sloped)
-      -hw, yL, -hd,   hw, yR, -hd,   hw, yR, hd,   -hw, yL, hd,
+      -hw, yL, -hd, hw, yR, -hd, hw, yR, hd, -hw, yL, hd,
       // Left face
-      -hw, yL, -hd,  -hw, yL, hd,  -hw, yL + THICK, hd,  -hw, yL + THICK, -hd,
+      -hw, yL, -hd, -hw, yL, hd, -hw, yL + THICK, hd, -hw, yL + THICK, -hd,
       // Right face
-       hw, yR, hd,    hw, yR, -hd,   hw, yR + THICK, -hd,  hw, yR + THICK, hd,
+      hw, yR, hd, hw, yR, -hd, hw, yR + THICK, -hd, hw, yR + THICK, hd,
     ]);
     const indices = new Uint16Array([
-      0,1,2, 0,2,3,    4,5,6, 4,6,7,    8,9,10, 8,10,11,
-      12,13,14, 12,14,15, 16,17,18, 16,18,19, 20,21,22, 20,22,23,
+      0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11,
+      12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23,
     ]);
     g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
     g.setIndex(new THREE.BufferAttribute(indices, 1));
@@ -1091,11 +1091,11 @@ function Path3D({ shape, isSelected, onSelect, isDraggable }) {
 // ─── Road (wider paved surface with lane markings) ───────────────
 // Road surface type definitions
 const ROAD_SURFACES = {
-  tar:      { label: 'Tar / Asphalt',  color: '#374151', hoverColor: '#4b5563', roughness: 0.92, metalness: 0.0,  markings: 'asphalt'  },
-  cement:   { label: 'Cement / Concrete', color: '#9ca3af', hoverColor: '#b0b8c4', roughness: 0.85, metalness: 0.05, markings: 'concrete' },
-  mud:      { label: 'Mud Road',        color: '#78552b', hoverColor: '#8b6934', roughness: 1.0,  metalness: 0.0,  markings: 'mud'      },
-  gravel:   { label: 'Gravel',          color: '#a8977a', hoverColor: '#bfad93', roughness: 1.0,  metalness: 0.0,  markings: 'gravel'   },
-  dirt:     { label: 'Dirt Track',      color: '#92613a', hoverColor: '#a87448', roughness: 0.98, metalness: 0.0,  markings: 'dirt'     },
+  tar: { label: 'Tar / Asphalt', color: '#374151', hoverColor: '#4b5563', roughness: 0.92, metalness: 0.0, markings: 'asphalt' },
+  cement: { label: 'Cement / Concrete', color: '#9ca3af', hoverColor: '#b0b8c4', roughness: 0.85, metalness: 0.05, markings: 'concrete' },
+  mud: { label: 'Mud Road', color: '#78552b', hoverColor: '#8b6934', roughness: 1.0, metalness: 0.0, markings: 'mud' },
+  gravel: { label: 'Gravel', color: '#a8977a', hoverColor: '#bfad93', roughness: 1.0, metalness: 0.0, markings: 'gravel' },
+  dirt: { label: 'Dirt Track', color: '#92613a', hoverColor: '#a87448', roughness: 0.98, metalness: 0.0, markings: 'dirt' },
 };
 
 function Road3D({ shape, isSelected, onSelect, isDraggable }) {
@@ -1448,7 +1448,7 @@ function Platform3D({ shape, isSelected, onSelect, isDraggable }) {
         {mat(fill, 0.85, isSelected, hovered, { roughness: 0.85 })}
       </mesh>
       {/* Legs */}
-      {[[-1,-1],[-1,1],[1,-1],[1,1]].map(([sx, sz], i) => (
+      {[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz], i) => (
         <mesh key={`leg${i}`} position={[sx * (pw / 2 - legBar), ph / 2, sz * (pd / 2 - legBar)]} castShadow>
           <boxGeometry args={[legBar, ph, legBar]} />
           {mat('#666', 0.9, isSelected, hovered, { roughness: 0.4, metalness: 0.5 })}
@@ -1564,10 +1564,10 @@ function Shed3D({ shape, isSelected, onSelect, isDraggable }) {
     const g = new THREE.BufferGeometry();
     const hw = sw / 2, hd = sd / 2;
     const verts = new Float32Array([
-      -hw, sh, -hd,  hw, sh, -hd,  0, sh + rh, 0,
-      hw, sh, -hd,   hw, sh, hd,   0, sh + rh, 0,
-      hw, sh, hd,   -hw, sh, hd,   0, sh + rh, 0,
-      -hw, sh, hd,  -hw, sh, -hd,  0, sh + rh, 0,
+      -hw, sh, -hd, hw, sh, -hd, 0, sh + rh, 0,
+      hw, sh, -hd, hw, sh, hd, 0, sh + rh, 0,
+      hw, sh, hd, -hw, sh, hd, 0, sh + rh, 0,
+      -hw, sh, hd, -hw, sh, -hd, 0, sh + rh, 0,
     ]);
     g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
     g.computeVertexNormals();
@@ -1857,46 +1857,46 @@ function Shape3D({ shape, isSelected, onSelect, isDraggable }) {
   const props = { shape, isSelected, onSelect, isDraggable };
 
   switch (shape.type) {
-    case 'rectangle':  return <Rectangle3D {...props} />;
-    case 'circle':     return <Circle3D {...props} />;
-    case 'ellipse':    return <Ellipse3D {...props} />;
-    case 'triangle':   return <Triangle3D {...props} />;
+    case 'rectangle': return <Rectangle3D {...props} />;
+    case 'circle': return <Circle3D {...props} />;
+    case 'ellipse': return <Ellipse3D {...props} />;
+    case 'triangle': return <Triangle3D {...props} />;
     case 'boundary':
     case 'polygon':
-    case 'curve':      return <Polygon3D {...props} />;
+    case 'curve': return <Polygon3D {...props} />;
     case 'line':
-    case 'path_line':  return <Line3D {...props} />;
-    case 'arc':        return <Arc3D {...props} />;
+    case 'path_line': return <Line3D {...props} />;
+    case 'arc': return <Arc3D {...props} />;
     // Real-world elements
-    case 'tank':       return <Tank3D {...props} />;
-    case 'house':      return <House3D {...props} />;
-    case 'tree':       return <Tree3D {...props} />;
-    case 'wall':       return <Wall3D {...props} />;
-    case 'window':     return <Window3D {...props} />;
-    case 'pillar':     return <Pillar3D {...props} />;
-    case 'door':       return <Door3D {...props} />;
+    case 'tank': return <Tank3D {...props} />;
+    case 'house': return <House3D {...props} />;
+    case 'tree': return <Tree3D {...props} />;
+    case 'wall': return <Wall3D {...props} />;
+    case 'window': return <Window3D {...props} />;
+    case 'pillar': return <Pillar3D {...props} />;
+    case 'door': return <Door3D {...props} />;
     case 'ventilator': return <Ventilator3D {...props} />;
-    case 'pipe':       return <Pipe3D {...props} />;
-    case 'cable':      return <Cable3D {...props} />;
-    case 'path':       return <Path3D {...props} />;
-    case 'road':       return <Road3D {...props} />;
+    case 'pipe': return <Pipe3D {...props} />;
+    case 'cable': return <Cable3D {...props} />;
+    case 'path': return <Path3D {...props} />;
+    case 'road': return <Road3D {...props} />;
     case 'metalSheet': return <MetalSheet3D {...props} />;
     case 'concreteSlab': return <ConcreteSlab3D {...props} />;
     // Structural & layout elements
     case 'metalFrame': return <MetalFrame3D {...props} />;
-    case 'fence':      return <Fence3D {...props} />;
-    case 'gate':       return <Gate3D {...props} />;
-    case 'platform':   return <Platform3D {...props} />;
-    case 'stairs':     return <Stairs3D {...props} />;
+    case 'fence': return <Fence3D {...props} />;
+    case 'gate': return <Gate3D {...props} />;
+    case 'platform': return <Platform3D {...props} />;
+    case 'stairs': return <Stairs3D {...props} />;
     case 'solarPanel': return <SolarPanel3D {...props} />;
-    case 'shed':       return <Shed3D {...props} />;
-    case 'gardenBed':  return <GardenBed3D {...props} />;
-    case 'pond':       return <Pond3D {...props} />;
-    case 'lampPost':   return <LampPost3D {...props} />;
-    case 'bench':      return <Bench3D {...props} />;
-    case 'sign':       return <Sign3D {...props} />;
-    case 'container':  return <Container3D {...props} />;
-    case 'parkingSpot':return <ParkingSpot3D {...props} />;
+    case 'shed': return <Shed3D {...props} />;
+    case 'gardenBed': return <GardenBed3D {...props} />;
+    case 'pond': return <Pond3D {...props} />;
+    case 'lampPost': return <LampPost3D {...props} />;
+    case 'bench': return <Bench3D {...props} />;
+    case 'sign': return <Sign3D {...props} />;
+    case 'container': return <Container3D {...props} />;
+    case 'parkingSpot': return <ParkingSpot3D {...props} />;
     default:
       return (
         <mesh position={to3D(shape.x || 0, shape.y || 0, 0.15)}
@@ -1913,52 +1913,52 @@ function Shape3D({ shape, isSelected, onSelect, isDraggable }) {
 // ═════════════════════════════════════════════════════════════════
 // Group metadata for the toolbar
 const CATALOG_GROUPS = {
-  shape:     { label: 'Shapes',     icon: '🔷', color: '#60a5fa' },
-  building:  { label: 'Building',   icon: '🏠', color: '#f59e0b' },
-  infra:     { label: 'Infra',      icon: '🔧', color: '#06b6d4' },
-  material:  { label: 'Materials',  icon: '🔩', color: '#a78bfa' },
-  structure: { label: 'Structure',  icon: '🏗️', color: '#f472b6' },
-  outdoor:   { label: 'Outdoor',    icon: '🌿', color: '#34d399' },
+  shape: { label: 'Shapes', icon: '🔷', color: '#60a5fa' },
+  building: { label: 'Building', icon: '🏠', color: '#f59e0b' },
+  infra: { label: 'Infra', icon: '🔧', color: '#06b6d4' },
+  material: { label: 'Materials', icon: '🔩', color: '#a78bfa' },
+  structure: { label: 'Structure', icon: '🏗️', color: '#f472b6' },
+  outdoor: { label: 'Outdoor', icon: '🌿', color: '#34d399' },
 };
 
 const ELEMENT_CATALOG = [
   // ── Shapes ──
-  { type: 'rectangle', icon: '⬛', label: 'Box',      group: 'shape', dims: { width: 100, height: 80, extrudeHeight: 0.5 } },
-  { type: 'circle',    icon: '⚫', label: 'Cylinder', group: 'shape', dims: { radius: 40, extrudeHeight: 0.5 } },
-  { type: 'triangle',  icon: '🔺', label: 'Prism',   group: 'shape', dims: { radius: 40, extrudeHeight: 0.5 } },
+  { type: 'rectangle', icon: '⬛', label: 'Box', group: 'shape', dims: { width: 100, height: 80, extrudeHeight: 0.5 } },
+  { type: 'circle', icon: '⚫', label: 'Cylinder', group: 'shape', dims: { radius: 40, extrudeHeight: 0.5 } },
+  { type: 'triangle', icon: '🔺', label: 'Prism', group: 'shape', dims: { radius: 40, extrudeHeight: 0.5 } },
   // ── Building ──
-  { type: 'house',     icon: '🏠', label: 'House',   group: 'building', dims: { houseLength: 120, houseWidth: 100, houseHeight: 80, roofHeight: 40 } },
-  { type: 'wall',      icon: '🧱', label: 'Wall',    group: 'building', dims: { width: 200, thickness: 10, extrudeHeight: 1.0, wallHeightLeft: 1.0, wallHeightRight: 1.0 } },
-  { type: 'window',    icon: '🪟', label: 'Window',  group: 'building', dims: { windowWidth: 60, windowHeight: 50 } },
-  { type: 'door',      icon: '🚪', label: 'Door',    group: 'building', dims: { doorWidth: 45, doorHeight: 1.05 } },
-  { type: 'pillar',    icon: '🏛️', label: 'Pillar',  group: 'building', dims: { pillarRadius: 8, pillarHeight: 1.5 } },
-  { type: 'shed',      icon: '🏡', label: 'Shed',    group: 'building', dims: { shedWidth: 100, shedDepth: 80, shedHeight: 0.6, shedRoofHeight: 0.25 } },
+  { type: 'house', icon: '🏠', label: 'House', group: 'building', dims: { houseLength: 120, houseWidth: 100, houseHeight: 80, roofHeight: 40 } },
+  { type: 'wall', icon: '🧱', label: 'Wall', group: 'building', dims: { width: 200, thickness: 10, extrudeHeight: 1.0, wallHeightLeft: 1.0, wallHeightRight: 1.0 } },
+  { type: 'window', icon: '🪟', label: 'Window', group: 'building', dims: { windowWidth: 60, windowHeight: 50 } },
+  { type: 'door', icon: '🚪', label: 'Door', group: 'building', dims: { doorWidth: 45, doorHeight: 1.05 } },
+  { type: 'pillar', icon: '🏛️', label: 'Pillar', group: 'building', dims: { pillarRadius: 8, pillarHeight: 1.5 } },
+  { type: 'shed', icon: '🏡', label: 'Shed', group: 'building', dims: { shedWidth: 100, shedDepth: 80, shedHeight: 0.6, shedRoofHeight: 0.25 } },
   // ── Infrastructure ──
-  { type: 'tank',      icon: '🛢️', label: 'Tank',    group: 'infra',  dims: { radius: 40, extrudeHeight: 1.0 } },
-  { type: 'pipe',      icon: '💧', label: 'Pipe',    group: 'infra',  dims: { length: 200, pipeRadius: 5 } },
-  { type: 'cable',     icon: '⚡', label: 'Cable',   group: 'infra',  dims: { length: 200, cableRadius: 2, postHeight: 0.5 } },
-  { type: 'path',      icon: '👣', label: 'Path',    group: 'infra',  dims: { width: 200, pathWidth: 30 } },
-  { type: 'road',      icon: '🛣️', label: 'Road',    group: 'infra',  dims: { width: 300, roadWidth: 60, roadSurface: 'tar' } },
-  { type: 'ventilator',icon: '🌀', label: 'Ventilator', group: 'infra', dims: { ventRadius: 20 } },
+  { type: 'tank', icon: '🛢️', label: 'Tank', group: 'infra', dims: { radius: 40, extrudeHeight: 1.0 } },
+  { type: 'pipe', icon: '💧', label: 'Pipe', group: 'infra', dims: { length: 200, pipeRadius: 5 } },
+  { type: 'cable', icon: '⚡', label: 'Cable', group: 'infra', dims: { length: 200, cableRadius: 2, postHeight: 0.5 } },
+  { type: 'path', icon: '👣', label: 'Path', group: 'infra', dims: { width: 200, pathWidth: 30 } },
+  { type: 'road', icon: '🛣️', label: 'Road', group: 'infra', dims: { width: 300, roadWidth: 60, roadSurface: 'tar' } },
+  { type: 'ventilator', icon: '🌀', label: 'Ventilator', group: 'infra', dims: { ventRadius: 20 } },
   // ── Materials ──
-  { type: 'metalSheet',   icon: '🔩', label: 'Metal Sheet',   group: 'material', dims: { sheetWidth: 200, sheetDepth: 150, sheetTilt: 0, sheetElevLeft: 0, sheetElevRight: 0 } },
+  { type: 'metalSheet', icon: '🔩', label: 'Metal Sheet', group: 'material', dims: { sheetWidth: 200, sheetDepth: 150, sheetTilt: 0, sheetElevLeft: 0, sheetElevRight: 0 } },
   { type: 'concreteSlab', icon: '🪨', label: 'Concrete Slab', group: 'material', dims: { slabWidth: 200, slabDepth: 150, slabThickness: 0.08 } },
   // ── Structure ──
   { type: 'metalFrame', icon: '🏗️', label: 'Metal Frame', group: 'structure', dims: { frameWidth: 150, frameDepth: 100, frameHeight: 1.5, barThickness: 3 } },
-  { type: 'fence',      icon: '🏚️', label: 'Fence',       group: 'structure', dims: { width: 200, fenceHeight: 0.6 } },
-  { type: 'gate',       icon: '🚪', label: 'Gate',        group: 'structure', dims: { gateWidth: 80, gateHeight: 0.8 } },
-  { type: 'platform',   icon: '📋', label: 'Platform',    group: 'structure', dims: { width: 150, platformDepth: 120, platformHeight: 0.3 } },
-  { type: 'stairs',     icon: '🪜', label: 'Stairs',      group: 'structure', dims: { stairWidth: 60, stairDepth: 100, stairHeight: 0.8, stairSteps: 5 } },
-  { type: 'container',  icon: '📦', label: 'Container',   group: 'structure', dims: { containerWidth: 150, containerDepth: 60, containerHeight: 0.8 } },
+  { type: 'fence', icon: '🏚️', label: 'Fence', group: 'structure', dims: { width: 200, fenceHeight: 0.6 } },
+  { type: 'gate', icon: '🚪', label: 'Gate', group: 'structure', dims: { gateWidth: 80, gateHeight: 0.8 } },
+  { type: 'platform', icon: '📋', label: 'Platform', group: 'structure', dims: { width: 150, platformDepth: 120, platformHeight: 0.3 } },
+  { type: 'stairs', icon: '🪜', label: 'Stairs', group: 'structure', dims: { stairWidth: 60, stairDepth: 100, stairHeight: 0.8, stairSteps: 5 } },
+  { type: 'container', icon: '📦', label: 'Container', group: 'structure', dims: { containerWidth: 150, containerDepth: 60, containerHeight: 0.8 } },
   // ── Outdoor ──
-  { type: 'tree',       icon: '🌲', label: 'Tree',        group: 'outdoor', dims: { trunkRadius: 5, trunkHeight: 0.4, canopyRadius: 30, extrudeHeight: 0.8 } },
+  { type: 'tree', icon: '🌲', label: 'Tree', group: 'outdoor', dims: { trunkRadius: 5, trunkHeight: 0.4, canopyRadius: 30, extrudeHeight: 0.8 } },
   { type: 'solarPanel', icon: '☀️', label: 'Solar Panel', group: 'outdoor', dims: { panelWidth: 120, panelDepth: 80, panelTilt: 30, postHeight: 0.4 } },
-  { type: 'gardenBed',  icon: '🌱', label: 'Garden Bed',  group: 'outdoor', dims: { bedWidth: 120, bedDepth: 60, bedHeight: 0.15 } },
-  { type: 'pond',       icon: '💦', label: 'Pond',        group: 'outdoor', dims: { pondRadius: 50, pondDepth: 0.1 } },
-  { type: 'lampPost',   icon: '💡', label: 'Lamp Post',   group: 'outdoor', dims: { poleHeight: 1.2 } },
-  { type: 'bench',      icon: '🪑', label: 'Bench',       group: 'outdoor', dims: { benchWidth: 80 } },
-  { type: 'sign',       icon: '🪧', label: 'Sign',        group: 'outdoor', dims: { signWidth: 60, signHeight: 0.4, poleHeight: 0.8 } },
-  { type: 'parkingSpot',icon: '🅿️', label: 'Parking',     group: 'outdoor', dims: { spotWidth: 60, spotDepth: 120 } },
+  { type: 'gardenBed', icon: '🌱', label: 'Garden Bed', group: 'outdoor', dims: { bedWidth: 120, bedDepth: 60, bedHeight: 0.15 } },
+  { type: 'pond', icon: '💦', label: 'Pond', group: 'outdoor', dims: { pondRadius: 50, pondDepth: 0.1 } },
+  { type: 'lampPost', icon: '💡', label: 'Lamp Post', group: 'outdoor', dims: { poleHeight: 1.2 } },
+  { type: 'bench', icon: '🪑', label: 'Bench', group: 'outdoor', dims: { benchWidth: 80 } },
+  { type: 'sign', icon: '🪧', label: 'Sign', group: 'outdoor', dims: { signWidth: 60, signHeight: 0.4, poleHeight: 0.8 } },
+  { type: 'parkingSpot', icon: '🅿️', label: 'Parking', group: 'outdoor', dims: { spotWidth: 60, spotDepth: 120 } },
 ];
 
 // Dimension labels
@@ -2008,7 +2008,7 @@ function getWallEndpoints(wall) {
   const dy = (w / 2) * Math.sin(rot);
   return {
     start: { x: cx - dx, y: cy - dy },
-    end:   { x: cx + dx, y: cy + dy },
+    end: { x: cx + dx, y: cy + dy },
   };
 }
 
@@ -2098,20 +2098,24 @@ function PropertiesPanel3D({ selectedShape, shapes, onUpdateShape, onDeleteShape
         <span className="three-prop-label">X</span>
         <input type="number" className="three-prop-edit-input three-prop-inline"
           value={uVal(displayX)} step={uStep}
-          onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) {
-            if (isPointBased) handlePointBasedMove('x', pxFromInput(v));
-            else onUpdateShape(shape.id, { x: pxFromInput(v) });
-          }}} />
+          onChange={(e) => {
+            const v = parseFloat(e.target.value); if (!isNaN(v)) {
+              if (isPointBased) handlePointBasedMove('x', pxFromInput(v));
+              else onUpdateShape(shape.id, { x: pxFromInput(v) });
+            }
+          }} />
         <span className="three-prop-edit-unit">{sym}</span>
       </div>
       <div className="three-prop-row">
         <span className="three-prop-label">Y</span>
         <input type="number" className="three-prop-edit-input three-prop-inline"
           value={uVal(displayY)} step={uStep}
-          onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) {
-            if (isPointBased) handlePointBasedMove('y', pxFromInput(v));
-            else onUpdateShape(shape.id, { y: pxFromInput(v) });
-          }}} />
+          onChange={(e) => {
+            const v = parseFloat(e.target.value); if (!isNaN(v)) {
+              if (isPointBased) handlePointBasedMove('y', pxFromInput(v));
+              else onUpdateShape(shape.id, { y: pxFromInput(v) });
+            }
+          }} />
         <span className="three-prop-edit-unit">{sym}</span>
       </div>
       <div className="three-prop-row">
@@ -2436,20 +2440,68 @@ function GroupedElementToolbar({ addingElement, setAddingElement }) {
 
   const handleExportCatalog = () => {
     const catalog = ELEMENT_CATALOG.map(elem => {
+      const isPointBased = ['pipe', 'cable', 'line', 'path_line'].includes(elem.type);
+      
       const dimEntries = Object.entries(elem.dims).map(([key, defaultValue]) => ({
         key, label: DIM_LABELS[key] || key, defaultValue,
         type: typeof defaultValue === 'string' ? 'string' : 'number',
+        description: `Dimension parameter '${key}'. Used to configure the physical size or characteristic of the ${elem.type}.`
       }));
+      
+      const standardProps = [
+        { key: 'x', label: 'Position X', defaultValue: 0, type: 'number', description: 'Center X coordinate in the 3D world (horizontal).' },
+        { key: 'y', label: 'Position Y', defaultValue: 0, type: 'number', description: 'Center Y coordinate in the 3D world (depth).' },
+        { key: 'z', label: 'Elevation (Z)', defaultValue: 0, type: 'number', description: 'Elevation height from the ground (0 means on the ground).' },
+        { key: 'rotation', label: 'Rotation', defaultValue: 0, type: 'number', description: 'Angle of rotation in degrees (0 to 360).' },
+        { key: 'color', label: 'Color', defaultValue: CATALOG_GROUPS[elem.group]?.color || '#ffffff', type: 'string', description: 'Hex color string to override the default material color.' },
+        { key: 'opacity', label: 'Opacity', defaultValue: 1.0, type: 'number', description: 'Opacity level from 0.1 to 1.0 (fully solid).' },
+        { key: 'groupId', label: 'Group ID', defaultValue: null, type: 'string', description: 'ID of the group this object is linked with.' },
+        { key: 'name', label: 'Name', defaultValue: elem.label, type: 'string', description: 'User-assigned readable name of the object instance.' },
+      ];
+
+      if (isPointBased) {
+        standardProps.push({
+          key: 'points', label: 'Points', defaultValue: [0, 0, 100, 100], type: 'array',
+          description: 'A flat array of coordinates [x1, y1, x2, y2...] defining segments. Overrides x and y.'
+        });
+      }
+      if (elem.type === 'wall') {
+        standardProps.push({
+          key: 'windows', label: 'Windows', defaultValue: [], type: 'array',
+          description: 'Array of window objects on this wall. E.g. [{ width: 40, height: 30, offsetX: 0, offsetY: 40 }]'
+        });
+      }
+      if (elem.type === 'road') {
+        standardProps.push({
+          key: 'roadSurface', label: 'Road Surface Material', defaultValue: 'tar', type: 'string',
+          description: 'Material type for the road surface (e.g. tar, dirt, gravel).'
+        });
+      }
+
+      const allProperties = [...standardProps, ...dimEntries];
+      const schemaDef = {
+        type: 'object',
+        description: `Schema defining all acceptable key-values for a ${elem.type} element.`,
+        properties: Object.fromEntries(allProperties.map(p => [
+          p.key, 
+          { type: p.type, description: p.description, default: p.defaultValue }
+        ]))
+      };
+
       return {
         type: elem.type, icon: elem.icon, label: elem.label, group: elem.group,
+        description: `Template object for '${elem.label}'. This fully describes what it holds and all its allowed spatial and dimensional configurations.`,
         capabilities: {
           draggable: true, rotatable: true, elevationZ: true, resizable: true,
+          positionX: true, positionY: true, positionZ: true,
           colorCustomizable: true, opacityControl: true, groupLinkable: true,
           snapToGrid: true, copyPaste: true, undoRedo: true,
-          pointBased: ['pipe', 'cable', 'line', 'path_line'].includes(elem.type),
+          pointBased: isPointBased,
           roadSurfaces: elem.type === 'road', wallContinuation: elem.type === 'wall',
         },
-        dimensions: dimEntries, defaultDimensions: { ...elem.dims },
+        properties: allProperties,
+        schema: schemaDef,
+        defaultDimensions: { ...elem.dims, x: 0, y: 0, z: 0, rotation: 0 },
       };
     });
     const exportData = {
@@ -2644,10 +2696,10 @@ function ViewTransitioner({ viewPreset, bounds, controlsRef }) {
     const dist = Math.max(extent * 1.2, 3);
     target.current.set(cx, 0, cz);
     switch (viewPreset) {
-      case 'top':   goalPos.current.set(cx, dist + 5, cz + 0.001); break;
+      case 'top': goalPos.current.set(cx, dist + 5, cz + 0.001); break;
       case 'front': goalPos.current.set(cx, extent * 0.3, cz + dist); break;
       case 'right': goalPos.current.set(cx + dist, extent * 0.3, cz); break;
-      default:      goalPos.current.set(cx + dist * 0.7, dist * 0.7, cz + dist * 0.7); break;
+      default: goalPos.current.set(cx + dist * 0.7, dist * 0.7, cz + dist * 0.7); break;
     }
     isAnimating.current = true;
     animFrame.current = 0;
@@ -2692,8 +2744,8 @@ function DomDragSystem({ controlsRef, shapesRef, onDragMove, onDragEnd, onDragSt
   // Stable axis-aligned planes — never recomputed from camera direction
   const planes = useMemo(() => ({
     ground: new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),   // Y=0  (for top/perspective)
-    front:  new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),   // Z=0  (for front view)
-    right:  new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),   // X=0  (for right view)
+    front: new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),   // Z=0  (for front view)
+    right: new THREE.Plane(new THREE.Vector3(1, 0, 0), 0),   // X=0  (for right view)
   }), []);
   // dragRef: { shapeId, offsetX, offsetY, offsetZ, frozenX, frozenY, frozenZ }
   // frozenX/frozenY/frozenZ: the axis value that is locked for this view
@@ -2716,7 +2768,7 @@ function DomDragSystem({ controlsRef, shapesRef, onDragMove, onDragEnd, onDragSt
       if (!shape) return { cx: 0, cy: 0 };
       // Point-based shapes: compute center from points array
       if (shape.points && shape.points.length >= 4 &&
-          ['pipe', 'cable', 'line', 'path_line'].includes(shape.type)) {
+        ['pipe', 'cable', 'line', 'path_line'].includes(shape.type)) {
         let sumX = 0, sumY = 0, n = 0;
         for (let i = 0; i < shape.points.length; i += 2) {
           sumX += shape.points[i];
@@ -3117,7 +3169,7 @@ function SceneShapes({ shapes, selectedId, onSelect, isDraggable, onDragStart })
     <>
       {shapes.map(shape => (
         <Shape3D key={shape.id} shape={shape}
-          isSelected={selectedId === shape.id} onSelect={onSelect || (() => {})}
+          isSelected={selectedId === shape.id} onSelect={onSelect || (() => { })}
           isDraggable={isDraggable} />
       ))}
     </>
@@ -3146,7 +3198,7 @@ function MiniScene({ shapes, bounds, unit, pxPerUnit }) {
       </mesh>
       {shapes.map(shape => (
         <Shape3D key={shape.id} shape={shape}
-          isSelected={false} onSelect={() => {}}
+          isSelected={false} onSelect={() => { }}
           isDraggable={false} />
       ))}
     </>
@@ -3278,9 +3330,9 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
   }, [onShapesChange]);
 
   // Persist unit settings to localStorage
-  useEffect(() => { try { localStorage.setItem('pp3d_unit', unit); } catch {} }, [unit]);
-  useEffect(() => { try { localStorage.setItem('pp3d_pxPerUnit', String(pxPerUnit)); } catch {} }, [pxPerUnit]);
-  useEffect(() => { try { localStorage.setItem('pp3d_ratioLocked', String(ratioLocked)); } catch {} }, [ratioLocked]);
+  useEffect(() => { try { localStorage.setItem('pp3d_unit', unit); } catch { } }, [unit]);
+  useEffect(() => { try { localStorage.setItem('pp3d_pxPerUnit', String(pxPerUnit)); } catch { } }, [pxPerUnit]);
+  useEffect(() => { try { localStorage.setItem('pp3d_ratioLocked', String(ratioLocked)); } catch { } }, [ratioLocked]);
 
   // Derived unit helpers
   const uDef = UNIT_DEFS[unit];
@@ -3596,132 +3648,184 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
         // ═══ WALLS — all opacity 1.0, TH overlap at corners ═══
 
         // SOUTH wall (14ft E-W) — Vastu: minimal openings on south
-        { id: uid(), type: 'wall', name: 'South Wall', x: OX - TH / 2, y: OY - TH / 2,
+        {
+          id: uid(), type: 'wall', name: 'South Wall', x: OX - TH / 2, y: OY - TH / 2,
           width: BW + TH, thickness: TH,
           wallHeightLeft: H_W, wallHeightRight: H_E, extrudeHeight: H_W,
           fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 0,
-          windows: [] }, // NO south windows per Vastu (Yama direction)
+          windows: []
+        }, // NO south windows per Vastu (Yama direction)
 
         // NORTH wall (14ft E-W) — Vastu: maximum openings on north (Kubera)
-        { id: uid(), type: 'wall', name: 'North Wall', x: OX - TH / 2, y: OY + BD - TH / 2,
+        {
+          id: uid(), type: 'wall', name: 'North Wall', x: OX - TH / 2, y: OY + BD - TH / 2,
           width: BW + TH, thickness: TH,
           wallHeightLeft: H_W, wallHeightRight: H_E, extrudeHeight: H_W,
           fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 0,
           windows: [
             { width: ft(2.5), height: ft(2), offsetX: -ft(2), offsetY: WIN_Y },
             { width: ft(2.5), height: ft(2), offsetX: ft(2.5), offsetY: WIN_Y },
-          ] }, // 2 windows on north — prosperity direction
+          ]
+        }, // 2 windows on north — prosperity direction
 
         // WEST wall (28ft N-S, rotation=90) — SOLID, NO WINDOWS — blocks afternoon sun
-        { id: uid(), type: 'wall', name: 'West Wall (Back)', x: OX - TH / 2, y: OY - TH / 2,
+        {
+          id: uid(), type: 'wall', name: 'West Wall (Back)', x: OX - TH / 2, y: OY - TH / 2,
           width: BD + TH, thickness: TH,
           wallHeightLeft: H_W, wallHeightRight: H_W, extrudeHeight: H_W,
-          fill: backWallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 90, windows: [] },
+          fill: backWallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 90, windows: []
+        },
 
         // EAST wall — South segment (long, south of door, 2 windows)
-        { id: uid(), type: 'wall', name: 'East Wall (South)', x: OX + BW - TH / 2, y: OY - TH / 2,
+        {
+          id: uid(), type: 'wall', name: 'East Wall (South)', x: OX + BW - TH / 2, y: OY - TH / 2,
           width: southSegLen + TH / 2, thickness: TH,
           wallHeightLeft: H_E, wallHeightRight: H_E, extrudeHeight: H_E,
           fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 90,
           windows: [
             { width: ft(2.5), height: ft(2), offsetX: ft(3), offsetY: WIN_Y },
             { width: ft(2.5), height: ft(2), offsetX: -ft(4), offsetY: WIN_Y },
-          ] },
+          ]
+        },
 
         // EAST wall — North segment (short, north of door, 1 window)
-        { id: uid(), type: 'wall', name: 'East Wall (North)', x: OX + BW - TH / 2, y: OY + southSegLen + DOOR_W + ft(0.5),
+        {
+          id: uid(), type: 'wall', name: 'East Wall (North)', x: OX + BW - TH / 2, y: OY + southSegLen + DOOR_W + ft(0.5),
           width: northSegLen + TH / 2, thickness: TH,
           wallHeightLeft: H_E, wallHeightRight: H_E, extrudeHeight: H_E,
           fill: wallColor, stroke: '#78716c', strokeWidth: 2, opacity: 1.0, rotation: 90,
           windows: [
             { width: ft(2.5), height: ft(2), offsetX: 0, offsetY: WIN_Y },
-          ] },
+          ]
+        },
 
         // ═══ DOOR — NE quadrant of east wall (Vastu auspicious pada) ═══
-        { id: uid(), type: 'door', name: 'Main Door (NE Vastu)',
+        {
+          id: uid(), type: 'door', name: 'Main Door (NE Vastu)',
           x: OX + BW - DOOR_W / 2, y: OY + southSegLen,
           doorWidth: DOOR_W, doorHeight: DOOR_H,
-          fill: '#8B4513', stroke: '#5a3a1a', strokeWidth: 2, opacity: 1.0, rotation: 90 },
+          fill: '#8B4513', stroke: '#5a3a1a', strokeWidth: 2, opacity: 1.0, rotation: 90
+        },
 
         // ═══ METAL SHEET ROOF (slopes W→E, water drains East) ═══
-        { id: uid(), type: 'metalSheet', name: 'Main Roof', x: OX - ft(0.5), y: OY - ft(0.5),
+        {
+          id: uid(), type: 'metalSheet', name: 'Main Roof', x: OX - ft(0.5), y: OY - ft(0.5),
           sheetWidth: BW + ft(1), sheetDepth: BD + ft(1), sheetTilt: 5,
-          z: H_E / SC, fill: '#607d8b', stroke: '#455a64', strokeWidth: 1, opacity: 1.0, rotation: 0 },
-        { id: uid(), type: 'metalSheet', name: 'Front Overhang (10ft)', x: OX + BW, y: OY - ft(0.5),
+          z: H_E / SC, fill: '#607d8b', stroke: '#455a64', strokeWidth: 1, opacity: 1.0, rotation: 0
+        },
+        {
+          id: uid(), type: 'metalSheet', name: 'Front Overhang (10ft)', x: OX + BW, y: OY - ft(0.5),
           sheetWidth: OH, sheetDepth: BD + ft(1), sheetTilt: 3,
-          z: H_E / SC, fill: '#78909c', stroke: '#455a64', strokeWidth: 1, opacity: 0.95, rotation: 0 },
+          z: H_E / SC, fill: '#78909c', stroke: '#455a64', strokeWidth: 1, opacity: 0.95, rotation: 0
+        },
 
         // ═══ OVERHANG PILLARS ═══
-        { id: uid(), type: 'pillar', name: 'Pillar SE', x: OX + BW + OH - ft(0.5), y: OY + ft(1),
-          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
-        { id: uid(), type: 'pillar', name: 'Pillar NE', x: OX + BW + OH - ft(0.5), y: OY + BD - ft(1),
-          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
-        { id: uid(), type: 'pillar', name: 'Pillar Mid-S', x: OX + BW + OH - ft(0.5), y: OY + ft(10),
-          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
-        { id: uid(), type: 'pillar', name: 'Pillar Mid-N', x: OX + BW + OH - ft(0.5), y: OY + ft(18),
-          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0 },
+        {
+          id: uid(), type: 'pillar', name: 'Pillar SE', x: OX + BW + OH - ft(0.5), y: OY + ft(1),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0
+        },
+        {
+          id: uid(), type: 'pillar', name: 'Pillar NE', x: OX + BW + OH - ft(0.5), y: OY + BD - ft(1),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0
+        },
+        {
+          id: uid(), type: 'pillar', name: 'Pillar Mid-S', x: OX + BW + OH - ft(0.5), y: OY + ft(10),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0
+        },
+        {
+          id: uid(), type: 'pillar', name: 'Pillar Mid-N', x: OX + BW + OH - ft(0.5), y: OY + ft(18),
+          pillarRadius: 6, pillarHeight: H_E, fill: '#9e9e9e', opacity: 1.0
+        },
 
         // ═══ FOUNDATION ═══
-        { id: uid(), type: 'concreteSlab', name: 'Foundation', x: OX - ft(0.5), y: OY - ft(0.5),
+        {
+          id: uid(), type: 'concreteSlab', name: 'Foundation', x: OX - ft(0.5), y: OY - ft(0.5),
           slabWidth: BW + ft(1), slabDepth: BD + ft(1), slabThickness: 0.05, z: 0,
-          fill: '#bdbdbd', stroke: '#999', strokeWidth: 1, opacity: 1.0 },
-        { id: uid(), type: 'concreteSlab', name: 'Overhang Floor', x: OX + BW, y: OY - ft(0.5),
+          fill: '#bdbdbd', stroke: '#999', strokeWidth: 1, opacity: 1.0
+        },
+        {
+          id: uid(), type: 'concreteSlab', name: 'Overhang Floor', x: OX + BW, y: OY - ft(0.5),
           slabWidth: OH + ft(0.5), slabDepth: BD + ft(1), slabThickness: 0.04, z: 0,
-          fill: '#c8c8c8', stroke: '#aaa', strokeWidth: 1, opacity: 1.0 },
+          fill: '#c8c8c8', stroke: '#aaa', strokeWidth: 1, opacity: 1.0
+        },
 
         // ═══ 1000L WATER TANK — Vastu: SW corner of roof (overhead) ═══
         // 1000L ≈ 3.3ft dia × 4.3ft tall
-        { id: uid(), type: 'tank', name: '1000L Tank (Vastu SW)',
+        {
+          id: uid(), type: 'tank', name: '1000L Tank (Vastu SW)',
           x: OX + ft(2), y: OY + ft(2),  // SW corner of building
           radius: ft(1.65), extrudeHeight: ftH(4.3),
           z: H_W / SC + 2,  // on top of the higher west-side roof
-          fill: '#1565c0', stroke: '#0d47a1', strokeWidth: 2, opacity: 1.0 },
+          fill: '#1565c0', stroke: '#0d47a1', strokeWidth: 2, opacity: 1.0
+        },
 
         // ═══ VASTU: NE corner — open, light, water element ═══
         // Small Tulasi/herb garden (Vastu: NE should be green, open)
-        { id: uid(), type: 'gardenBed', name: 'Tulasi Garden (Vastu NE)',
+        {
+          id: uid(), type: 'gardenBed', name: 'Tulasi Garden (Vastu NE)',
           x: OX + BW + ft(2), y: OY + BD - ft(4),
           bedWidth: ft(4), bedDepth: ft(3), bedHeight: 0.08,
-          fill: '#4caf50', stroke: '#388e3c', strokeWidth: 1, opacity: 0.9 },
+          fill: '#4caf50', stroke: '#388e3c', strokeWidth: 1, opacity: 0.9
+        },
         // Small pond/water feature in NE (Vastu: water source in NE Ishanya)
-        { id: uid(), type: 'pond', name: 'Water Feature (Vastu NE)',
+        {
+          id: uid(), type: 'pond', name: 'Water Feature (Vastu NE)',
           x: OX + BW + ft(3), y: OY + BD + ft(2),
           pondRadius: ft(2), pondDepth: 0.06,
-          fill: '#42a5f5', stroke: '#1e88e5', strokeWidth: 1, opacity: 0.85 },
+          fill: '#42a5f5', stroke: '#1e88e5', strokeWidth: 1, opacity: 0.85
+        },
 
         // ═══ VENTILATORS (hot air exhaust, west upper wall) ═══
-        { id: uid(), type: 'ventilator', name: 'Exhaust Vent 1', x: OX + ft(1), y: OY + ft(7),
-          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90 },
-        { id: uid(), type: 'ventilator', name: 'Exhaust Vent 2', x: OX + ft(1), y: OY + ft(14),
-          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90 },
-        { id: uid(), type: 'ventilator', name: 'Exhaust Vent 3', x: OX + ft(1), y: OY + ft(21),
-          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90 },
+        {
+          id: uid(), type: 'ventilator', name: 'Exhaust Vent 1', x: OX + ft(1), y: OY + ft(7),
+          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90
+        },
+        {
+          id: uid(), type: 'ventilator', name: 'Exhaust Vent 2', x: OX + ft(1), y: OY + ft(14),
+          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90
+        },
+        {
+          id: uid(), type: 'ventilator', name: 'Exhaust Vent 3', x: OX + ft(1), y: OY + ft(21),
+          ventRadius: 12, z: ftH(10.5) / SC, fill: '#607d8b', opacity: 1.0, rotation: 90
+        },
 
         // ═══ SHADE TREES — Vastu: SW & S side (Nairuthi heavy) ═══
-        { id: uid(), type: 'tree', name: 'Shade Tree SW1', x: OX - ft(6), y: OY + ft(3),
+        {
+          id: uid(), type: 'tree', name: 'Shade Tree SW1', x: OX - ft(6), y: OY + ft(3),
           trunkRadius: 5, trunkHeight: 0.55, canopyRadius: ft(3), extrudeHeight: 1.1,
-          fill: '#2e7d32', stroke: '#1b5e20', opacity: 0.9 },
-        { id: uid(), type: 'tree', name: 'Shade Tree SW2', x: OX - ft(6), y: OY + ft(9),
+          fill: '#2e7d32', stroke: '#1b5e20', opacity: 0.9
+        },
+        {
+          id: uid(), type: 'tree', name: 'Shade Tree SW2', x: OX - ft(6), y: OY + ft(9),
           trunkRadius: 5, trunkHeight: 0.55, canopyRadius: ft(3), extrudeHeight: 1.1,
-          fill: '#2e7d32', stroke: '#1b5e20', opacity: 0.9 },
-        { id: uid(), type: 'tree', name: 'Shade Tree W3', x: OX - ft(6), y: OY + ft(15),
+          fill: '#2e7d32', stroke: '#1b5e20', opacity: 0.9
+        },
+        {
+          id: uid(), type: 'tree', name: 'Shade Tree W3', x: OX - ft(6), y: OY + ft(15),
           trunkRadius: 4, trunkHeight: 0.5, canopyRadius: ft(2.5), extrudeHeight: 1.0,
-          fill: '#388e3c', stroke: '#2e7d32', opacity: 0.9 },
+          fill: '#388e3c', stroke: '#2e7d32', opacity: 0.9
+        },
         // NW side — lighter/smaller tree (Vastu: NW less heavy than SW)
-        { id: uid(), type: 'tree', name: 'Tree NW', x: OX - ft(5), y: OY + ft(24),
+        {
+          id: uid(), type: 'tree', name: 'Tree NW', x: OX - ft(5), y: OY + ft(24),
           trunkRadius: 3, trunkHeight: 0.4, canopyRadius: ft(2), extrudeHeight: 0.8,
-          fill: '#4caf50', stroke: '#388e3c', opacity: 0.85 },
+          fill: '#4caf50', stroke: '#388e3c', opacity: 0.85
+        },
 
         // ═══ STAIRS — Vastu: SW direction ═══
-        { id: uid(), type: 'stairs', name: 'Steps (Vastu SW)',
+        {
+          id: uid(), type: 'stairs', name: 'Steps (Vastu SW)',
           x: OX + BW + ft(0.5), y: OY + ft(2),  // South side of east entrance
           stairWidth: ft(4), stairDepth: ft(3), stairHeight: 0.12, stairSteps: 3,
-          fill: '#bdbdbd', stroke: '#999', strokeWidth: 1, opacity: 1.0, rotation: 90 },
+          fill: '#bdbdbd', stroke: '#999', strokeWidth: 1, opacity: 1.0, rotation: 90
+        },
 
         // ═══ LAMP — Vastu: NE entrance ═══
-        { id: uid(), type: 'lampPost', name: 'Lamp (Vastu NE)',
+        {
+          id: uid(), type: 'lampPost', name: 'Lamp (Vastu NE)',
           x: OX + BW + ft(5), y: OY + BD - ft(4),  // NE area near door
-          poleHeight: ftH(8), fill: '#ffeb3b', opacity: 1.0 },
+          poleHeight: ftH(8), fill: '#ffeb3b', opacity: 1.0
+        },
       ];
 
       pushUndo(shapesRef.current);
@@ -3745,7 +3849,7 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
 
     // Point-based shapes: move all points
     if (s.points && s.points.length >= 4 &&
-        ['pipe', 'cable', 'line', 'path_line'].includes(s.type)) {
+      ['pipe', 'cable', 'line', 'path_line'].includes(s.type)) {
       const newPoints = [...s.points];
       for (let i = 0; i < newPoints.length; i += 2) {
         newPoints[i] = Math.round(newPoints[i] + dx);
@@ -3759,7 +3863,7 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
   // Get center of a shape in 2D px
   const getShapeCenter = (s) => {
     if (s.points && s.points.length >= 4 &&
-        ['pipe', 'cable', 'line', 'path_line'].includes(s.type)) {
+      ['pipe', 'cable', 'line', 'path_line'].includes(s.type)) {
       let sumX = 0, sumY = 0, n = 0;
       for (let i = 0; i < s.points.length; i += 2) {
         sumX += s.points[i]; sumY += s.points[i + 1]; n++;
@@ -4117,8 +4221,10 @@ export default function ThreeCanvas({ shapes = [], onShapesChange }) {
           }}>
             🔗 Click another object to link • <button
               onClick={() => setLinkingFrom(null)}
-              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#93c5fd',
-                padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              style={{
+                background: 'rgba(255,255,255,0.1)', border: 'none', color: '#93c5fd',
+                padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12
+              }}>
               Cancel (Esc)
             </button>
           </div>
